@@ -7,7 +7,17 @@ import PlotsOverlay from './PlotsOverlay';
 import PlotsDynamic from './PlotsDynamic';
 import { scrollElement } from '../Shared/helpers';
 import ScatterPlotDiv from './ScatterPlotDiv';
-import { Grid, Popup, Label, Sidebar, Icon, List } from 'semantic-ui-react';
+import {
+  Grid,
+  Popup,
+  Label,
+  Sidebar,
+  Icon,
+  List,
+  Button,
+  Form,
+  Input,
+} from 'semantic-ui-react';
 import ButtonActions from '../Shared/ButtonActions';
 import './DifferentialDetail.scss';
 import SplitPane from 'react-split-pane';
@@ -40,37 +50,102 @@ class DifferentialDetail extends Component {
       localStorage.getItem('upperPlotsVisible') == null
         ? true
         : false,
-    // differentialTableData: [],
-    filteredDifferentialTableData: [],
     itemsPerPageVolcanoTable:
       parseInt(localStorage.getItem('itemsPerPageVolcanoTable'), 10) || 15,
-    // volcanoPlotRows: 0,
     animation: 'overlay',
     direction: 'right',
     visible: false,
     allChecked: false,
     enableTabChangeOnSelection: true,
     scatterplotLoaded: false,
+    // data consumed by EZGrid (it handles it's own filters)
+    differentialTableData: [],
+    differentialTableRows: 0,
+    // data consumed by Scatterplot, AFTER EZGrid filters it's data
+    filteredDifferentialTableData: [],
+    // all data in scatterplot selection
+    allDataInScatterView: [],
+    // active data in scatterplot selection
+    volcanoPlotSelectedDataArr: [],
+    // single feature search
+    singleFeatureSearchActive: false,
+    singleFeatureSearchIcon: 'search',
+    singleFeatureSearchText: '',
+    singleFeatureSearched: '',
+    // multi-feature search
+    multiFeatureSearchText: '',
+    multiFeaturesSearched: [],
+    multiSearching: false,
+    multiSearchOpen: false,
+    multiFeaturesNotFound: [],
+    multiFeatureSearchActive: false,
+    multiFeatureSearchTextError: false,
   };
   volcanoPlotFilteredGridRef = React.createRef();
 
-  componentDidMount() {
-    this.setState({
-      differentialTableData: this.props.differentialResults,
-      // volcanoPlotRows: this.props.differentialResults.length,
-    });
-  }
-
-  componentDidUpdate(prevProps) {
-    const { differentialResults } = this.props;
+  componentDidUpdate(prevProps, prevState) {
+    const {
+      differentialResults,
+      differentialFeatureIdKey,
+      differentialResultsUnfiltered,
+    } = this.props;
+    const {
+      multiFeaturesSearched,
+      singleFeatureSearched,
+      allDataInScatterView,
+    } = this.state;
+    if (
+      prevProps.differentialResultsUnfiltered !==
+      this.props.differentialResultsUnfiltered
+    ) {
+      this.setState({
+        allDataInScatterView: differentialResultsUnfiltered,
+      });
+    }
     if (prevProps.differentialResults !== differentialResults) {
+      // GOAL: set the new state for differentialTableData (consumed by EZGrid)
+      // which will update itself (filters) and fire 'handleTableChanged'
+      // which sets new state for volcanoPlotSelectedDataArr (consumed by scatter plot)
+      let relevantSearched = [...differentialResults];
+      // 1) keep the differentialResults that pass single or multiple feature SEARCH filters
+      if (multiFeaturesSearched.length || singleFeatureSearched !== '') {
+        if (multiFeaturesSearched.length) {
+          // multi-search filter
+          const multiFeaturesSearchedSet = new Set(multiFeaturesSearched);
+          relevantSearched = [...differentialResults].filter(d =>
+            multiFeaturesSearchedSet.has(d[differentialFeatureIdKey]),
+          );
+        } else {
+          // single search filter
+          relevantSearched = [...differentialResults].filter(d =>
+            d[this.props.differentialFeatureIdKey].includes(
+              singleFeatureSearched,
+            ),
+          );
+        }
+      }
+      let relevantSearchedAndInScatterView = relevantSearched;
+      // 2) keep the intersection from 1) above and what is in current scatterplot view
+      const allDataInScatterViewIdsSet = new Set(
+        [...allDataInScatterView].map(
+          d => d[this.props.differentialFeatureIdKey],
+        ),
+      );
+      relevantSearchedAndInScatterView = [...relevantSearched].filter(d =>
+        allDataInScatterViewIdsSet.has(d[this.props.differentialFeatureIdKey]),
+      );
       this.setState({
         allChecked: false,
-        differentialTableData: differentialResults,
-        volcanoPlotRows: differentialResults?.length || 0,
+        differentialTableData: relevantSearchedAndInScatterView,
+        differentialTableRows: relevantSearchedAndInScatterView?.length || 0,
+        filteredDifferentialTableData: relevantSearchedAndInScatterView,
       });
     }
   }
+
+  hasWhitespace = s => {
+    return s.indexOf(' ') >= 0;
+  };
 
   pageToFeature = featureToHighlight => {
     if (featureToHighlight) {
@@ -108,11 +183,6 @@ class DifferentialDetail extends Component {
     ) {
       className = 'rowHighlightOther';
     }
-    /* eslint-disable eqeqeq */
-    // if (item[differentialFeatureIdKey] === volcanoDifferentialTableRowMax) {
-    //   className = 'rowHighlightMax';
-    // }
-    /* eslint-disable eqeqeq */
     if (item[differentialFeatureIdKey] === differentialOutlinedFeature) {
       id = 'rowOutline';
     }
@@ -123,24 +193,58 @@ class DifferentialDetail extends Component {
   };
 
   handleVolcanoPlotSelectionChange = (
-    volcanoPlotSelectedDataArr,
+    volcanoPlotSelectedDataArrArg,
     clearHighlightedData,
     doubleClickEvent,
+    allDataInScatterView,
   ) => {
     const {
       differentialFeatureIdKey,
       differentialHighlightedFeatures,
       differentialOutlinedFeature,
       plotMultiFeatureAvailable,
+      differentialResults,
     } = this.props;
+    const { multiFeaturesSearched, singleFeatureSearched } = this.state;
+    // volcanoPlotSelectedDataArrArg is empty
+    // when grey circles are selected
+    this.setState({
+      volcanoPlotSelectedDataArr: volcanoPlotSelectedDataArrArg,
+      allDataInScatterView,
+    });
+    let relevantDifferentialData = [...volcanoPlotSelectedDataArrArg];
+    if (doubleClickEvent) {
+      // on double click,
+      // differentialResults is passed as volcanoPlotSelectedDataArrArg
+      // to make it more clear, just use differentialResults below
+      if (multiFeaturesSearched.length || singleFeatureSearched !== '') {
+        // find the intersection between the searched features, and volcano plot
+        if (multiFeaturesSearched.length) {
+          const multiFeaturesSearchedSet = new Set(multiFeaturesSearched);
+          relevantDifferentialData = [...differentialResults].filter(d =>
+            multiFeaturesSearchedSet.has(
+              d[this.props.differentialFeatureIdKey],
+            ),
+          );
+        } else {
+          relevantDifferentialData = [...differentialResults].filter(d =>
+            d[this.props.differentialFeatureIdKey].includes(
+              singleFeatureSearched,
+            ),
+          );
+        }
+      }
+    }
     // this.setState({
     //   allChecked: false,
     // });
     // clear the highlighted rows/dots/svg on svg double-click
+    // this is an option, but currently we are NOT using it
+    // we retain the highlighted data (scatter function transitionZoom second arg)
     if (clearHighlightedData) {
       this.setState(
         {
-          differentialTableData: volcanoPlotSelectedDataArr,
+          differentialTableData: differentialResults,
         },
         // in callback so scatter reload is priority
         function() {
@@ -157,7 +261,7 @@ class DifferentialDetail extends Component {
     //    this.props.differentialResults;
     //  // const sortDataIds = new Set([...sortedData].map(d => d[this.props.differentialFeatureIdKey]));
     //  const volcanoPlotDataArrIds = new Set(
-    //    [...volcanoPlotSelectedDataArr].map(
+    //    [...relevantDifferentialData].map(
     //      d => d[this.props.differentialFeatureIdKey],
     //    ),
     //  );
@@ -165,16 +269,16 @@ class DifferentialDetail extends Component {
     //    volcanoPlotDataArrIds.has(d[this.props.differentialFeatureIdKey]),
     //  );
     // IF DATA
-    if (volcanoPlotSelectedDataArr.length > 0) {
+    if (relevantDifferentialData.length > 0) {
       const self = this;
       self.setState(
         {
-          differentialTableData: volcanoPlotSelectedDataArr,
-          volcanoPlotRows: volcanoPlotSelectedDataArr.length,
+          differentialTableData: relevantDifferentialData,
+          differentialTableRows: relevantDifferentialData.length,
         },
         function() {
           // load the table, then paging and mapping
-          let allFeatureIdsRemaining = [...volcanoPlotSelectedDataArr].map(
+          let allFeatureIdsRemaining = [...relevantDifferentialData].map(
             i => i[differentialFeatureIdKey],
           );
           let isOutlinedFeatureInView = allFeatureIdsRemaining.includes(
@@ -198,7 +302,7 @@ class DifferentialDetail extends Component {
               differentialHighlightedFeatures,
             );
             let multiselectedFeaturesArrRemaining = [
-              ...volcanoPlotSelectedDataArr,
+              ...relevantDifferentialData,
             ].filter(item =>
               highlightedFeatures.has(item[differentialFeatureIdKey]),
             );
@@ -240,7 +344,7 @@ class DifferentialDetail extends Component {
       this.pageToFeature();
       this.setState({
         differentialTableData: [],
-        volcanoPlotRows: 0,
+        differentialTableRows: 0,
       });
     }
   };
@@ -719,11 +823,336 @@ class DifferentialDetail extends Component {
     this.props.onHandleMultifeaturePlot('Overlay', tableData, true);
   };
 
+  getRelevantSingleFeatureSearchData = () => {
+    const { differentialResults } = this.props;
+    const { singleFeatureSearchText, allDataInScatterView } = this.state;
+    // goal: set the new state for differentialTableData, which will update the scatter plot
+    let relevantSearchedDifferentialData = [...differentialResults];
+    // 1) keep the differentialResults that pass SINGLE SEARCH filters
+    if (singleFeatureSearchText !== '') {
+      relevantSearchedDifferentialData = [...differentialResults].filter(d =>
+        d[this.props.differentialFeatureIdKey].includes(
+          singleFeatureSearchText,
+        ),
+      );
+    }
+    let relevantDifferentialDataSearchAndInView = relevantSearchedDifferentialData;
+    // 2) keep data is in current volcano view/selection
+    if (allDataInScatterView.length) {
+      const allDataInScatterViewIdsSet = new Set(
+        [...allDataInScatterView].map(
+          d => d[this.props.differentialFeatureIdKey],
+        ),
+      );
+      relevantDifferentialDataSearchAndInView = [
+        ...relevantSearchedDifferentialData,
+      ].filter(d =>
+        allDataInScatterViewIdsSet.has(d[this.props.differentialFeatureIdKey]),
+      );
+    }
+    return relevantDifferentialDataSearchAndInView;
+  };
+
+  getEmptySearchData = () => {
+    const { differentialResults } = this.props;
+    const { allDataInScatterView } = this.state;
+    let relevantDifferentialDataSearchAndInView = [...differentialResults];
+    // 1) keep differentialResults that are in current volcano view/selection
+    if (allDataInScatterView.length) {
+      const allDataInScatterViewIdsSet = new Set(
+        [...allDataInScatterView].map(
+          d => d[this.props.differentialFeatureIdKey],
+        ),
+      );
+      relevantDifferentialDataSearchAndInView = [
+        ...differentialResults,
+      ].filter(d =>
+        allDataInScatterViewIdsSet.has(d[this.props.differentialFeatureIdKey]),
+      );
+    }
+    return relevantDifferentialDataSearchAndInView;
+  };
+
+  handleSingleFeatureSearchTextChange = e => {
+    this.setState({
+      singleFeatureSearchActive: true,
+      singleFeatureSearchIcon: 'search',
+    });
+    if (e.target.value === '') {
+      this.handleSingleFeatureSearchClear();
+    } else if (
+      e.target.value.includes(',') ||
+      e.target.value.includes('\n') ||
+      this.hasWhitespace(e.target.value)
+    ) {
+      this.setState({
+        // singleFeatureSearchText: '',
+        multiFeatureSearchText: e.target.value,
+        multiSearching: true,
+        multiSearchOpen: true,
+        multiFeatureSearchActive: true,
+      });
+    } else {
+      this.setState({
+        // multiFeatureSearchText: '',
+        singleFeatureSearchText: e.target.value,
+        // multiSearching: false,
+        // multiSearchOpen: false,
+      });
+    }
+  };
+
+  handleSingleFeatureSearchSubmit = () => {
+    const {
+      // volcanoPlotSelectedDataArr,
+      // allDataInScatterView,
+      singleFeatureSearchText,
+    } = this.state;
+    if (singleFeatureSearchText.length < 3) return;
+    const relevantDifferentialData = this.getRelevantSingleFeatureSearchData();
+    if (relevantDifferentialData.length) {
+      this.setState({
+        differentialTableData: relevantDifferentialData,
+        differentialTableRows: relevantDifferentialData?.length || 0,
+        singleFeatureSearchActive: false,
+        singleFeatureSearchIcon: 'remove',
+        singleFeatureSearched: singleFeatureSearchText,
+      });
+    } else {
+      this.setState({
+        differentialTableData: [],
+        differentialTableRows: 0,
+        singleFeatureSearchActive: false,
+        singleFeatureSearchIcon: 'remove',
+        singleFeatureSearched: singleFeatureSearchText,
+      });
+      // toast.error('No features found, please adjust your search');
+    }
+  };
+
+  handleSingleFeatureSearchClear = () => {
+    const { singleFeatureSearchText } = this.state;
+    const emptySearchData = this.getEmptySearchData();
+    if (singleFeatureSearchText.length) {
+      this.setState({
+        differentialTableData: emptySearchData,
+        differentialTableRows: emptySearchData?.length || 0,
+        singleFeatureSearchActive: false,
+        singleFeatureSearchIcon: 'search',
+        singleFeatureSearchText: '',
+        singleFeatureSearched: '',
+      });
+    }
+  };
+
+  moveCaretAtEnd = e => {
+    var temp_value = e.target.value;
+    e.target.value = '';
+    e.target.value = temp_value;
+  };
+
+  handleMultiFeatureSearchTextChange = (e, { value }) => {
+    this.setState({
+      multiFeatureSearchText: value,
+      multiFeatureSearchActive: true,
+    });
+  };
+
+  // handleMultiSearchClear = () => {
+  //   this.setState({
+  //     multiFeatureSearchText: '',
+  //   });
+  // };
+
+  submitMultiFeatureSearch = () => {
+    const { multiFeatureSearchText } = this.state;
+    if (multiFeatureSearchText === '') {
+      const emptySearchData = this.getEmptySearchData();
+      // if submit nothing, close and single feature search
+      this.setState({
+        singleFeatureSearchActive: false,
+        singleFeatureSearchIcon: 'search',
+        singleFeatureSearchText: '',
+        singleFeatureSearched: '',
+        multiFeatureSearchText: '',
+        multiSearching: false,
+        multiSearchOpen: false,
+        multiFeaturesSearched: [],
+        multiFeaturesNotFound: [],
+        multiFeatureSearchActive: false,
+        multiFeatureSearchTextError: false,
+        differentialTableData: emptySearchData,
+        differentialTableRows: emptySearchData?.length || 0,
+      });
+    } else if (
+      multiFeatureSearchText !== '' ||
+      multiFeatureSearchText.includes(',') ||
+      multiFeatureSearchText.includes('\n') ||
+      this.hasWhitespace(multiFeatureSearchText)
+    ) {
+      // do the multi-search!
+      this.setState({ multiFeatureSearchTextError: false });
+      this.handleMultiFeatureSearch();
+    } else {
+      // there are no features matched, but there is text
+      this.setState({ multiFeatureSearchTextError: true });
+    }
+  };
+
+  handleMultiSearchClose = () => {
+    const { multiFeatureSearchText } = this.state;
+    if (multiFeatureSearchText === '') {
+      // if close with nothing in text area
+      const emptySearchData = this.getEmptySearchData();
+      this.setState({
+        multiFeatureSearchText: '',
+        multiSearching: false,
+        multiSearchOpen: false,
+        multiFeaturesSearched: [],
+        multiFeaturesNotFound: [],
+        differentialTableData: emptySearchData,
+        differentialTableRows: emptySearchData?.length || 0,
+        singleFeatureSearchActive: false,
+        singleFeatureSearchIcon: 'search',
+        singleFeatureSearchText: '',
+      });
+    } else if (
+      multiFeatureSearchText.includes(',') ||
+      multiFeatureSearchText.includes('\n') ||
+      this.hasWhitespace(multiFeatureSearchText)
+    ) {
+      // if close with something valid in the text area
+      this.setState({
+        multiSearchOpen: false,
+        // singleFeatureSearchText: '',
+      });
+    } else {
+      // if close with something not valid in the text area
+      this.setState({
+        multiFeatureSearchText: '',
+        multiSearching: false,
+        multiSearchOpen: false,
+        singleFeatureSearchText: multiFeatureSearchText,
+      });
+    }
+  };
+
+  getRelevantMultiFeatureSearchData = () => {
+    const { differentialResults, differentialFeatureIdKey } = this.props;
+    const { multiFeaturesSearched, allDataInScatterView } = this.state;
+    // goal: set the new state for differentialTableData, which will update the scatter plot
+    let relevantSearchedDifferentialData = [...differentialResults];
+    // 1) keep the differentialResults that pass MULTIFEATURE SEARCH filters
+    // 1) keep data that passes search filters
+    if (multiFeaturesSearched.length) {
+      const multiFeaturesSearchedSet = new Set(multiFeaturesSearched);
+      relevantSearchedDifferentialData = [...differentialResults].filter(d =>
+        multiFeaturesSearchedSet.has(d[differentialFeatureIdKey]),
+      );
+    }
+    let relevantDifferentialDataSearchAndInView = relevantSearchedDifferentialData;
+    // 2) keep data is in current volcano view/selection
+    // if (allDataInScatterView.length) {
+    const allDataInScatterViewIdsSet = new Set(
+      [...allDataInScatterView].map(
+        d => d[this.props.differentialFeatureIdKey],
+      ),
+    );
+    relevantDifferentialDataSearchAndInView = [
+      ...relevantSearchedDifferentialData,
+    ].filter(d =>
+      allDataInScatterViewIdsSet.has(d[this.props.differentialFeatureIdKey]),
+    );
+    // }
+    return relevantDifferentialDataSearchAndInView;
+  };
+
+  // resetSearch = () => {
+  //   const { allDataInScatterView } = this.state;
+  //   this.setState({
+  //     differentialTableData: allDataInScatterView,
+  //     differentialTableRows: allDataInScatterView?.length || 0,
+  //     singleFeatureSearchActive: false,
+  //     singleFeatureSearchIcon: 'search',
+  //     singleFeatureSearchText: '',
+  //     singleFeatureSearched: '',
+  //     multiFeatureSearchText: '',
+  //     multiSearching: false,
+  //     multiSearchOpen: false,
+  //     multiFeaturesSearched: [],
+  //     multiFeaturesNotFound: [],
+  //     multiFeatureSearchActive: false,
+  //     multiFeatureSearchTextError: false,
+  //   });
+  // };
+
+  handleMultiFeatureSearch = () => {
+    const { multiFeatureSearchText } = this.state;
+    const multiFeatureSearchTextSplit = multiFeatureSearchText
+      // .replace(/[,;]$/, '')
+      // .split(',')
+      // .split(/\s*[,\n.]+\s*/)
+      // .split(/[ .:;?!~,`"&|()<>{}\[\]\r\n/\\]+/)
+      .split(/[,\s]+/)
+      .map(item => item.trim())
+      .filter(Boolean);
+    let multiFeaturesFound = [];
+    const relevantDataAfterSearchAndSelectionFilters = this.getRelevantMultiFeatureSearchData();
+    const multiFeaturesSearchedSet = new Set(multiFeatureSearchTextSplit);
+    const relevantDifferentialData = [
+      ...relevantDataAfterSearchAndSelectionFilters,
+    ].filter(d => {
+      if (
+        multiFeaturesSearchedSet.has(d[this.props.differentialFeatureIdKey])
+      ) {
+        multiFeaturesFound.push(d[this.props.differentialFeatureIdKey]);
+        return true;
+      } else return false;
+    });
+    function getDifference(setA, setB) {
+      return new Set([...setA].filter(element => !setB.has(element)));
+    }
+    const multiFeaturesFoundSet = new Set(multiFeaturesFound);
+    const multiFeaturesNotFoundSet = getDifference(
+      multiFeaturesSearchedSet,
+      multiFeaturesFoundSet,
+    );
+    const multiFeaturesNotFoundValues = Array.from(multiFeaturesNotFoundSet);
+    // if any filteredDifferentialTableData matches the search text, take action
+    // if (multiFeaturesFound.length) {
+    this.setState({
+      differentialTableData: relevantDifferentialData,
+      differentialTableRows: relevantDifferentialData?.length || 0,
+      multiFeaturesSearched: multiFeaturesFound,
+      multiFeaturesNotFound: multiFeaturesNotFoundValues,
+      multiFeatureSearchTextError:
+        !multiFeaturesFound.length && multiFeaturesNotFoundValues.length,
+      multiFeatureSearchText: multiFeaturesFound.toString(),
+      multiFeatureSearchActive: false,
+      singleFeatureSearchActive: false,
+      singleFeatureSearchIcon: 'search',
+      singleFeatureSearched: '',
+    });
+    // } else {
+    //  if no features are found
+    //  we are continuing with the search, and displaying no data
+    //  use and adjust this if we'd rather just not go through with the search
+    //   if (multiFeaturesNotFoundValues.length) {
+    //     this.setState({
+    //       multiFeaturesNotFound: multiFeaturesNotFoundValues,
+    //       // multiFeatureSearchActive: true,
+    //     });
+    //   } else {
+    //     this.resetSearch();
+    //   }
+    // }
+  };
+
   render() {
     const {
       differentialTableData,
       itemsPerPageVolcanoTable,
-      volcanoPlotRows,
+      differentialTableRows,
       volcanoPlotVisible,
       upperPlotsVisible,
       upperPlotsDivHeight,
@@ -733,6 +1162,12 @@ class DifferentialDetail extends Component {
       direction,
       differentialDynamicPlotWidth,
       enableTabChangeOnSelection,
+      multiFeaturesSearched,
+      multiFeatureSearchText,
+      multiFeatureSearchTextError,
+      multiSearchOpen,
+      multiFeaturesNotFound,
+      multiFeatureSearchActive,
     } = this.state;
 
     const {
@@ -810,6 +1245,7 @@ class DifferentialDetail extends Component {
         differentialTests,
         differentialHighlightedFeaturesData,
       } = this.props;
+
       if (plotOverlayVisible) {
         return (
           <Sidebar
@@ -872,11 +1308,169 @@ class DifferentialDetail extends Component {
           <List.Content>
             <List.Header>Select Multiple</List.Header>
             <List.Description>
-              Control-Click or Shift-Click a ROW to multi-select/mulit-deselect
+              Control-Click or Shift-Click a ROW to multi-select/multi-deselect
             </List.Description>
           </List.Content>
         </List.Item>
       </List>
+    );
+
+    const MultiFeatureSearchPopup = {
+      backgroundColor: '2E2E2E',
+      borderBottom: '2px solid var(--color-primary)',
+      color: '#FFF',
+      padding: '1em',
+      minWidth: '40vw',
+      maxWidth: '40vw',
+      fontSize: '13px',
+      wordBreak: 'break-all',
+    };
+
+    // const differentialTableDataOptions =
+    //   differentialTableData?.map(data => {
+    //     return {
+    //       key: data[this.props.differentialFeatureIdKey],
+    //       text: data[this.props.differentialFeatureIdKey],
+    //       value: data[this.props.differentialFeatureIdKey],
+    //     };
+    //   }) || [];
+
+    // const onSearch = searchString => {
+    // };
+
+    const isMultiSearchOpen = bool => {
+      if (bool != null) {
+        this.setState({ multiSearchOpen: bool });
+      } else this.setState({ multiSearchOpen: !this.state.multiOpen });
+    };
+    const searchColor =
+      this.state.singleFeatureSearchText.length < 3 ? 'lightgrey' : 'blue';
+    const searchIcon = this.state.singleFeatureSearchIcon;
+    const searchClick = this.state.singleFeatureSearchActive
+      ? this.handleSingleFeatureSearchSubmit
+      : this.handleSingleFeatureSearchClear;
+    const multiSearchInput = (
+      // this.state.multiSearching ? (
+      <div className="AbsoluteMultiSearchDifferential">
+        <span id="MultiSearchPopupContainer">
+          {!this.state.multiSearching ? (
+            <Input
+              placeholder="Search feature/s (min 3 char)"
+              value={this.state.singleFeatureSearchText}
+              onChange={this.handleSingleFeatureSearchTextChange}
+              action={{
+                color: searchColor,
+                icon: searchIcon,
+                onClick: searchClick,
+              }}
+            />
+          ) : null}
+          {this.state.multiSearching ? (
+            <Popup
+              trigger={
+                <Button
+                  as="div"
+                  labelPosition="right"
+                  onClick={isMultiSearchOpen}
+                >
+                  <Button color="blue" size="mini">
+                    <Icon name="search" />
+                    FEATURES SEARCHED
+                  </Button>
+                  <Label as="a" basic color="blue" pointing="left">
+                    {multiFeaturesSearched.length}
+                  </Label>
+                </Button>
+              }
+              position="right center"
+              basic
+              on="click"
+              open={multiSearchOpen}
+              inverted
+              style={MultiFeatureSearchPopup}
+              id="MultiFeatureSearchPopup"
+            >
+              <Popup.Header>Multi-Feature Search</Popup.Header>
+              <Popup.Content>
+                Paste or type features below; separate with a comma, space or
+                newline
+              </Popup.Content>
+              <Popup.Content id="MultiFeaturesSearchedList">
+                {multiFeaturesNotFound?.length ? (
+                  <List
+                    animated
+                    inverted
+                    verticalAlign="middle"
+                    className="NoSelect"
+                    divided
+                    horizontal
+                    size="mini"
+                  >
+                    <List.Item>NOT FOUND:</List.Item>
+                    {multiFeaturesNotFound.map(f => {
+                      return (
+                        <List.Item
+                          key={`featureList-${f}`}
+                          className="NoSelect"
+                        >
+                          <Label color="red" className="CursorPointer">
+                            {f}
+                          </Label>
+                        </List.Item>
+                      );
+                    })}
+                  </List>
+                ) : null}
+              </Popup.Content>
+              <Popup.Content>
+                <Form>
+                  <Form.TextArea
+                    autoFocus
+                    placeholder="Separate features with a comma, space, or newline"
+                    name="multiFeatureSearchText"
+                    id="multiFeatureSearchTextArea"
+                    value={multiFeatureSearchText}
+                    onChange={this.handleMultiFeatureSearchTextChange}
+                    onFocus={this.moveCaretAtEnd}
+                  />
+                </Form>
+                {multiFeatureSearchTextError ? (
+                  <Popup.Content id="multiFeatureSearchTextError">
+                    Features must be separated with a space, comma, or newline
+                  </Popup.Content>
+                ) : null}
+                <div>
+                  <Button
+                    className={
+                      multiFeatureSearchActive
+                        ? 'PrimaryBackground multiSearchAction'
+                        : 'multiSearchAction'
+                    }
+                    content="Search"
+                    onClick={this.submitMultiFeatureSearch}
+                    icon="search"
+                  />
+                  {/* <Button
+                    color="blue"
+                    className="multiSearchAction"
+                    content="Clear Selection"
+                    onClick={this.handleMultiSearchClear}
+                    icon="undo"
+                  /> */}
+                  <Button
+                    className="multiSearchAction"
+                    content="Close"
+                    onClick={this.handleMultiSearchClose}
+                    icon="close"
+                  />
+                </div>
+              </Popup.Content>
+            </Popup>
+          ) : null}
+        </span>
+      </div>
+      // ) : (
+      //   <Input onChange={this.handleSingleFeatureSearchTextChange} />
     );
 
     const table = (
@@ -889,11 +1483,11 @@ class DifferentialDetail extends Component {
         height={upperPlotsVisible ? 'auto' : '70vh'}
         // height="70vh"
         data={differentialTableData || []}
-        totalRows={volcanoPlotRows || 0}
+        totalRows={differentialTableRows || 0}
         columnsConfig={differentialColumns}
         itemsPerPage={itemsPerPageVolcanoTable}
         onItemsPerPageChange={this.handleItemsPerPageChange}
-        // disableGeneralSearch
+        disableGeneralSearch
         disableGrouping
         disableColumnVisibilityToggle
         // exportBaseName="VolcanoPlot_Filtered_Results"
@@ -905,6 +1499,16 @@ class DifferentialDetail extends Component {
         onFiltered={this.handleTableChange}
         disableQuickViewEditing
         disableQuickViewMenu
+        extraHeaderItem={
+          multiSearchInput
+          // <Dropdown
+          //   placeholder="Search"
+          //   multiple
+          //   search
+          //   selection
+          //   options={differentialTableDataOptions}
+          // />
+        }
       />
     );
     const scatterPlot = (
@@ -969,9 +1573,6 @@ class DifferentialDetail extends Component {
         onGetMultifeaturePlotTransitionAlt={
           this.getMultifeaturePlotTransitionAlt
         }
-        // onHandleMultifeaturePlotRef={
-        //   onHandleMultifeaturePlot
-        // }
         onHandleVolcanoVisability={this.handleVolcanoVisability}
         onHandleHighlightedFeaturesDifferential={
           this.props.onHandleHighlightedFeaturesDifferential
