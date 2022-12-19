@@ -80,6 +80,7 @@ class DifferentialDetail extends Component {
     multiFeaturesNotFound: [],
     multiFeatureSearchActive: false,
     multiFeatureSearchTextError: false,
+    notFoundLimit: 5,
   };
   volcanoPlotFilteredGridRef = React.createRef();
 
@@ -133,11 +134,15 @@ class DifferentialDetail extends Component {
     // 1) keep the differentialResults that pass single or multiple feature SEARCH filters
     if (multiFeaturesSearched.length || singleFeatureSearched.length) {
       if (multiFeaturesSearched.length) {
+        relevantSearched = [];
         // multi-search filter
         const multiFeaturesSearchedSet = new Set(multiFeaturesSearched);
-        relevantSearched = [...differentialResults].filter(d =>
-          multiFeaturesSearchedSet.has(d[differentialFeatureIdKey]),
-        );
+        differentialAlphanumericFields.forEach(daf => {
+          const columnIncludes = [...differentialResults].filter(d => {
+            return multiFeaturesSearchedSet.has(d[daf]);
+          });
+          relevantSearched = [...relevantSearched, ...columnIncludes];
+        });
       } else {
         // single search filter
         // filter the differentialResults for "includes" across all alphanumeric columns
@@ -258,6 +263,7 @@ class DifferentialDetail extends Component {
       differentialOutlinedFeature,
       plotMultiFeatureAvailable,
       differentialResults,
+      differentialAlphanumericFields,
     } = this.props;
     const { multiFeaturesSearched, singleFeatureSearched } = this.state;
     // volcanoPlotSelectedDataArrArg is empty
@@ -279,17 +285,30 @@ class DifferentialDetail extends Component {
         // find the intersection between the searched features, and volcano plot
         if (multiFeaturesSearched.length) {
           const multiFeaturesSearchedSet = new Set(multiFeaturesSearched);
-          relevantDifferentialData = [...differentialResults].filter(d =>
-            multiFeaturesSearchedSet.has(
-              d[this.props.differentialFeatureIdKey],
-            ),
-          );
+          relevantDifferentialData = [];
+          differentialAlphanumericFields.forEach(daf => {
+            const columnIncludes = [...differentialResults].filter(d => {
+              return multiFeaturesSearchedSet.has(d[daf]);
+            });
+            relevantDifferentialData = [
+              ...relevantDifferentialData,
+              ...columnIncludes,
+            ];
+          });
         } else {
-          relevantDifferentialData = [...differentialResults].filter(d =>
-            d[this.props.differentialFeatureIdKey].includes(
-              singleFeatureSearched,
-            ),
-          );
+          // single search filter
+          // filter the differentialResults for "includes" across all alphanumeric columns
+          relevantDifferentialData = [];
+          differentialAlphanumericFields.forEach(daf => {
+            const columnIncludes = [...differentialResults].filter(d => {
+              const dafLowercase = d[daf].toLowerCase();
+              return dafLowercase.includes(singleFeatureSearched);
+            });
+            relevantDifferentialData = [
+              ...relevantDifferentialData,
+              ...columnIncludes,
+            ];
+          });
         }
       }
     }
@@ -948,11 +967,8 @@ class DifferentialDetail extends Component {
         value.includes('\n') ||
         this.hasWhitespace(value)
       ) {
+        this.handleSingleFeatureSearchClear();
         this.setState({
-          singleFeatureSearchActive: false,
-          singleFeatureSearchText: '',
-          singleFeatureSearched: '',
-          singleFeatureSearchIcon: 'search',
           multiFeatureSearchText: value,
           multiSearching: true,
           multiFeatureSearchOpen: true,
@@ -1023,7 +1039,6 @@ class DifferentialDetail extends Component {
       this.hasWhitespace(multiFeatureSearchText)
     ) {
       // do the multi-search!
-      this.setState({ multiFeatureSearchTextError: false });
       this.handleMultiFeatureSearch();
     } else {
       // no delimiters
@@ -1060,7 +1075,7 @@ class DifferentialDetail extends Component {
   };
 
   handleMultiFeatureSearch = () => {
-    const { differentialResults, differentialFeatureIdKey } = this.props;
+    const { differentialResults, differentialAlphanumericFields } = this.props;
     const { allDataInScatterView, multiFeatureSearchText } = this.state;
     const multiFeatureSearchTextSplit = multiFeatureSearchText
       // split by comma or whitespace (\s), trim and filter out empty strings
@@ -1071,29 +1086,33 @@ class DifferentialDetail extends Component {
 
     // 1) keep the differentialResults that pass MULTIFEATURE SEARCH filters
     const multiFeatureSearchTextSet = new Set(multiFeatureSearchTextSplit);
-    const relevantDifferentialDataPassingSearch = [
-      ...differentialResults,
-    ].filter(d => multiFeatureSearchTextSet.has(d[differentialFeatureIdKey]));
+    // filter the differentialResults for "includes" across all alphanumeric columns
+    let relevantDifferentialDataSearchAndInView = [];
+    differentialAlphanumericFields.forEach(daf => {
+      const columnIncludes = [...differentialResults].filter(d => {
+        return multiFeatureSearchTextSet.has(d[daf]);
+      });
+      relevantDifferentialDataSearchAndInView = [
+        ...relevantDifferentialDataSearchAndInView,
+        ...columnIncludes,
+      ];
+    });
 
-    // 2) keep data is in current volcano view/selection
-    const allDataInScatterViewIdsSet = new Set(
-      [...allDataInScatterView].map(
-        d => d[this.props.differentialFeatureIdKey],
-      ),
-    );
-
+    // filter the differentialResults for "includes" across all alphanumeric columns
     let multiFeaturesFound = [];
-    const relevantDifferentialDataSearchAndInView = [
-      ...relevantDifferentialDataPassingSearch,
-    ].filter(d => {
-      if (
-        allDataInScatterViewIdsSet.has(d[this.props.differentialFeatureIdKey])
-      ) {
-        // push the features found to an array
-        // that will be used to calculate the "Not Found" state
-        multiFeaturesFound.push(d[this.props.differentialFeatureIdKey]);
-        return true;
-      } else return false;
+    differentialAlphanumericFields.forEach(daf => {
+      const columnIncludes = [...allDataInScatterView].filter(d => {
+        if (multiFeatureSearchTextSet.has(d[daf])) {
+          // push the features found to an array
+          // that will be used to calculate the "Not Found" state
+          multiFeaturesFound.push(d[daf]);
+          return true;
+        } else return false;
+      });
+      relevantDifferentialDataSearchAndInView = [
+        ...relevantDifferentialDataSearchAndInView,
+        ...columnIncludes,
+      ];
     });
 
     function getDifference(setA, setB) {
@@ -1105,17 +1124,23 @@ class DifferentialDetail extends Component {
       multiFeatureSearchTextSet,
       multiFeaturesFoundSet,
     );
-    const multiFeaturesNotFoundValues = Array.from(multiFeaturesNotFoundSet);
+    // const multiFeaturesNotFoundValues = Array.from(multiFeaturesNotFoundSet);
+    const uniqueMultiFeaturesNotFoundValues = [
+      ...new Set(multiFeaturesNotFoundSet),
+    ];
+    const uniqueMultiFeaturesFoundValues = [...new Set(multiFeaturesFoundSet)];
+
     this.setState({
       differentialTableData: relevantDifferentialDataSearchAndInView,
       differentialTableRows:
         relevantDifferentialDataSearchAndInView?.length || 0,
-      multiFeaturesSearched: multiFeaturesFound,
-      multiFeaturesNotFound: multiFeaturesNotFoundValues,
-      multiFeatureSearchOpen: multiFeaturesNotFoundValues.length ? true : false,
-      multiFeatureSearchTextError:
-        !multiFeaturesFound.length && multiFeaturesNotFoundValues.length,
-      multiFeatureSearchText: multiFeaturesFound.toString(),
+      multiFeaturesSearched: uniqueMultiFeaturesFoundValues,
+      multiFeaturesNotFound: uniqueMultiFeaturesNotFoundValues,
+      multiFeatureSearchOpen: uniqueMultiFeaturesNotFoundValues.length
+        ? true
+        : false,
+      multiFeatureSearchTextError: uniqueMultiFeaturesNotFoundValues.length,
+      multiFeatureSearchText: uniqueMultiFeaturesFoundValues.toString(),
       multiFeatureSearchActive: false,
       singleFeatureSearchActive: false,
       singleFeatureSearchIcon: 'search',
@@ -1156,10 +1181,11 @@ class DifferentialDetail extends Component {
       multiSearching,
       multiFeaturesSearched,
       multiFeatureSearchText,
-      // multiFeatureSearchTextError,
+      multiFeatureSearchTextError,
       multiFeatureSearchOpen,
       multiFeaturesNotFound,
       multiFeatureSearchActive,
+      notFoundLimit,
     } = this.state;
 
     const {
@@ -1318,18 +1344,6 @@ class DifferentialDetail extends Component {
       wordBreak: 'break-all',
     };
 
-    // const differentialTableDataOptions =
-    //   differentialTableData?.map(data => {
-    //     return {
-    //       key: data[this.props.differentialFeatureIdKey],
-    //       text: data[this.props.differentialFeatureIdKey],
-    //       value: data[this.props.differentialFeatureIdKey],
-    //     };
-    //   }) || [];
-
-    // const onSearch = searchString => {
-    // };
-
     const toggleMultiFeatureSearch = bool => {
       this.setState({
         multiFeatureSearchOpen: bool
@@ -1353,6 +1367,16 @@ class DifferentialDetail extends Component {
       fontSize: '13px',
       wordBreak: 'break-all',
     };
+    const notFoundLength = multiFeaturesNotFound.length;
+    const limitNotFound = notFoundLength > notFoundLimit ? true : false;
+    const notFoundList = limitNotFound
+      ? [...multiFeaturesNotFound].slice(0, notFoundLimit)
+      : [...multiFeaturesNotFound];
+    const limitNotFoundText = limitNotFound ? (
+      <span id="LimitNotFoundText">
+        ...{notFoundLength - notFoundLimit} more
+      </span>
+    ) : null;
     const multiSearchInput = (
       // this.state.multiSearching ? (
       <div className="AbsoluteMultiSearchDifferential">
@@ -1362,16 +1386,26 @@ class DifferentialDetail extends Component {
           <Popup
             trigger={
               <Button
+                className={
+                  singleFeatureSearchText.length ? 'FakeDisabled' : null
+                }
                 icon
                 id="MultiFeatureSearchToggle"
-                onClick={() => toggleMultiFeatureSearch(true)}
+                onClick={() => {
+                  if (!singleFeatureSearchText.length)
+                    toggleMultiFeatureSearch(true);
+                }}
               >
                 <Icon name="unordered list" />
               </Button>
             }
             style={SearchPopupStyle}
             className="TablePopupValue"
-            content="Multi-Feature Search"
+            content={
+              !singleFeatureSearchText.length
+                ? 'Multi-Feature List Search'
+                : 'Single-Feature Search must be cleared, to enable Multi-Feature List Search'
+            }
             inverted
             basic
             position="right center"
@@ -1433,10 +1467,11 @@ class DifferentialDetail extends Component {
               style={MultiFeatureSearchPopup}
               id="MultiFeatureSearchPopup"
             >
-              <Popup.Header>Multi-Feature Search</Popup.Header>
+              <Popup.Header>Multi-Feature List Search</Popup.Header>
               <Popup.Content>
                 Paste or type features below; separate with a comma, space or
-                newline
+                newline (<strong className="PrimaryColor">NOTE</strong>: this is
+                an <strong className="PrimaryColor">exact</strong> search)
               </Popup.Content>
               <Popup.Content id="MultiFeaturesSearchedList">
                 {multiFeaturesNotFound?.length ? (
@@ -1450,13 +1485,14 @@ class DifferentialDetail extends Component {
                     size="mini"
                   >
                     <List.Item className="NoSelect">NOT FOUND:</List.Item>
-                    {multiFeaturesNotFound.map(f => {
+                    {notFoundList.map(f => {
                       return (
                         <List.Item key={`featureList-${f}`}>
-                          <Label color="red">{f}</Label>
+                          <Label className="PrimaryBackground">{f}</Label>
                         </List.Item>
                       );
                     })}
+                    {limitNotFoundText}
                   </List>
                 ) : null}
               </Popup.Content>
@@ -1464,7 +1500,7 @@ class DifferentialDetail extends Component {
                 <Form>
                   <Form.TextArea
                     autoFocus
-                    placeholder="Separate features with a comma, space, or newline"
+                    placeholder="Separate featurs with a comma, space, or newline (NOTE: This is an exact search)"
                     name="multiFeatureSearchText"
                     id="multiFeatureSearchTextArea"
                     value={multiFeatureSearchText}
@@ -1472,12 +1508,12 @@ class DifferentialDetail extends Component {
                     onFocus={this.moveCaretAtEnd}
                   />
                 </Form>
-                {/* uncomment if we want to an additional alert for the user */}
-                {/* {multiFeatureSearchTextError ? (
+                {multiFeatureSearchTextError ? (
                   <Popup.Content id="multiFeatureSearchTextError">
-                    Features must be separated with a space, comma, or newline
+                    Did you enter the exact search term, separated by comma,
+                    space or newline?
                   </Popup.Content>
-                ) : null} */}
+                ) : null}
                 <div>
                   <Button
                     className={
