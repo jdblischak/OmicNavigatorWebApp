@@ -5,7 +5,7 @@ import CustomEmptyMessage from '../Shared/Templates';
 import { EZGrid } from '../Shared/QHGrid/index.module.js';
 import PlotsOverlay from './PlotsOverlay';
 import PlotsDynamic from './PlotsDynamic';
-import { scrollElement } from '../Shared/helpers';
+import { scrollElement, getDifferenceTwoSets } from '../Shared/helpers';
 import ScatterPlotDiv from './ScatterPlotDiv';
 import {
   Grid,
@@ -78,9 +78,12 @@ class DifferentialDetail extends Component {
     multiFeatureSearchOpen: false,
     multiFeaturesSearched: [],
     multiFeaturesNotFound: [],
+    multiFeaturesFilteredOut: [],
     multiFeatureSearchActive: false,
     multiFeatureSearchTextError: false,
     notFoundLimit: 5,
+    filteredOutLimit: 5,
+    eventFromTableColumnFilter: true,
   };
   volcanoPlotFilteredGridRef = React.createRef();
 
@@ -108,6 +111,8 @@ class DifferentialDetail extends Component {
     ) {
       this.setState({
         allDataInScatterView: differentialResultsUnfiltered,
+        multiFeaturesNotFound: [],
+        eventFromTableColumnFilter: true,
       });
     }
     if (prevProps.differentialResults !== differentialResults) {
@@ -122,20 +127,29 @@ class DifferentialDetail extends Component {
       multiFeaturesSearched,
       singleFeatureSearched,
       allDataInScatterView,
+      multiFeaturesFilteredOut,
     } = this.state;
     // GOAL: set the new state for differentialTableData (consumed by EZGrid)
     // which will update itself (filters) and fire 'handleTableChanged'
     // which sets new state for volcanoPlotSelectedDataArr (consumed by scatter plot)
     let relevantSearched = [...differentialResults];
     // 1) keep the differentialResults that pass single or multiple feature SEARCH filters
+    // PAUL - what is this below? the filtered out labels are not staying after a set analysis
+    const multiFeaturesSearchedAndFilteredOut = [
+      ...multiFeaturesFilteredOut,
+      ...multiFeaturesSearched,
+    ];
+    const multiFeaturesSearchedAndFilteredOutSet = new Set(
+      multiFeaturesSearchedAndFilteredOut,
+    );
     if (multiFeaturesSearched.length || singleFeatureSearched.length) {
       if (multiFeaturesSearched.length) {
         relevantSearched = [];
         // multi-search filter
-        const multiFeaturesSearchedSet = new Set(multiFeaturesSearched);
+        // const multiFeaturesSearchedSet = new Set(multiFeaturesSearched);
         differentialAlphanumericFields.forEach(columnKey => {
           const columnIncludes = [...differentialResults].filter(d => {
-            return multiFeaturesSearchedSet.has(d[columnKey]);
+            return multiFeaturesSearchedAndFilteredOutSet.has(d[columnKey]);
           });
           relevantSearched = [...relevantSearched, ...columnIncludes];
         });
@@ -162,9 +176,49 @@ class DifferentialDetail extends Component {
     relevantSearchedAndInScatterView = [...relevantSearched].filter(d =>
       allDataInScatterViewIdsSet.has(d[this.props.differentialFeatureIdKey]),
     );
+    // const relevantSearchedAndInScatterViewSet = new Set(
+    //   relevantSearchedAndInScatterView,
+    // );
     const uniqueRelevantSearchedAndInScatterView = [
       ...new Set(relevantSearchedAndInScatterView),
     ];
+    let uniqueFilteredOutValues = []; // multiFeaturesFilteredOut
+
+    if (multiFeaturesSearched.length) {
+      // reset the multi-feature search 'filtered out' labels
+      // const multiFeaturesSearchedAndFilteredOut = [...multiFeaturesSearched, ...multiFeaturesFilteredOut];
+      let multiFeaturesFound = [];
+      // multi-search filter
+      // change the "filtered out" tags accordingly"
+      // const multiFeaturesSearchedSet = new Set(multiFeaturesSearched);
+      differentialAlphanumericFields.forEach(columnKey => {
+        // eslint-disable-next-line no-unused-vars
+        const columnIncludes = [
+          ...uniqueRelevantSearchedAndInScatterView,
+        ].filter(d => {
+          if (multiFeaturesSearchedAndFilteredOutSet.has(d[columnKey])) {
+            // push the features found to an array
+            // that will be used to calculate the "Not Found" state
+            multiFeaturesFound.push(d[columnKey]);
+            return true;
+          } else return false;
+        });
+      });
+      const multiFeaturesFoundSet = new Set(multiFeaturesFound);
+      const newlyFilteredOutSet = getDifferenceTwoSets(
+        multiFeaturesSearchedAndFilteredOutSet,
+        multiFeaturesFoundSet,
+      );
+      uniqueFilteredOutValues = [...new Set(newlyFilteredOutSet)];
+      this.setState({
+        // PAUL
+        // adjust the not found, and found (new text)
+        multiFeaturesFilteredOut: uniqueFilteredOutValues,
+        multiFeatureSearchText: multiFeaturesFound.toString(),
+        multiFeatureSearchActive: false,
+        eventFromTableColumnFilter: false,
+      });
+    }
 
     this.setState({
       allChecked: false,
@@ -172,7 +226,6 @@ class DifferentialDetail extends Component {
       differentialTableRows:
         uniqueRelevantSearchedAndInScatterView?.length || 0,
       filteredDifferentialTableData: uniqueRelevantSearchedAndInScatterView,
-      multiFeatureSearchActive: true,
     });
   };
 
@@ -190,6 +243,7 @@ class DifferentialDetail extends Component {
         multiFeatureSearchOpen: false,
         multiFeaturesSearched: [],
         multiFeaturesNotFound: [],
+        multiFeaturesFilteredOut: [],
         multiFeatureSearchActive: false,
         multiFeatureSearchTextError: false,
         // data
@@ -197,6 +251,7 @@ class DifferentialDetail extends Component {
         differentialTableData: this.props.differentialResults,
         differentialTableRows: this.props.differentialResults.length,
         volcanoPlotSelectedDataArr: this.props.differentialResults,
+        eventFromTableColumnFilter: true,
       },
       function() {
         this.setRelevantData();
@@ -267,35 +322,117 @@ class DifferentialDetail extends Component {
       differentialResults,
       differentialAlphanumericFields,
     } = this.props;
-    const { multiFeaturesSearched, singleFeatureSearched } = this.state;
-    // volcanoPlotSelectedDataArrArg is empty
-    // when grey circles are selected
+    const {
+      multiFeaturesSearched,
+      singleFeatureSearched,
+      multiFeaturesFilteredOut,
+    } = this.state;
+
+    // always set
     this.setState({
-      volcanoPlotSelectedDataArr: volcanoPlotSelectedDataArrArg,
       allDataInScatterView,
-      // on scatter brush, make search active
-      // singleFeatureSearchActive: true,
-      // singleFeatureSearchIcon: 'search',
-      multiFeatureSearchActive: true,
+      volcanoPlotSelectedDataArr: volcanoPlotSelectedDataArrArg,
+      eventFromTableColumnFilter: false,
+      multiFeaturesNotFound: [],
+      multiFeatureSearchTextError: false,
     });
+    const multiFeaturesSearchedAndFilteredOut = [
+      ...multiFeaturesSearched,
+      ...multiFeaturesFilteredOut,
+    ];
+    // We want to "carry over" search terms FILTERED OUT to subsequent zooms
+    const multiFeaturesSearchedAndFilteredOutSet = new Set(
+      multiFeaturesSearchedAndFilteredOut,
+    );
+    if (multiFeaturesSearched.length && !doubleClickEvent) {
+      // on zoom, we want to change the multi-feature search/textarea to display found/not found pills and text
+      const multiFeaturesSearchedSet = new Set(multiFeaturesSearched);
+      let relevantDifferentialData = [];
+      let multiFeaturesFound = [];
+
+      differentialAlphanumericFields.forEach(columnKey => {
+        // filter the differentialResults for "includes" across all alphanumeric columns
+        const columnIncludes = [...volcanoPlotSelectedDataArrArg].filter(d => {
+          if (multiFeaturesSearchedSet.has(d[columnKey])) {
+            // push the features found to an array
+            // that will be used to calculate the "Not Found" state
+            multiFeaturesFound.push(d[columnKey]);
+            return true;
+          } else return false;
+        });
+        relevantDifferentialData = [
+          ...relevantDifferentialData,
+          ...columnIncludes,
+        ];
+      });
+      const multiFeaturesFoundSet = new Set(multiFeaturesFound);
+      // get the difference between the features searched and found
+      const multiFeaturesFilteredOutSet = getDifferenceTwoSets(
+        multiFeaturesSearchedAndFilteredOutSet,
+        multiFeaturesFoundSet,
+      );
+      //const multiFeaturesAndFilteredOutValues = Array.from(multiFeaturesFilteredOutSet);
+      const uniqueMultiFeaturesFilteredOutValues = [
+        ...new Set(multiFeaturesFilteredOutSet),
+      ];
+      const uniqueMultiFeaturesFoundValues = [
+        ...new Set(multiFeaturesFoundSet),
+      ];
+      this.setState({
+        // on scatter brush, make search active
+        // singleFeatureSearchActive: true,
+        // singleFeatureSearchIcon: 'search',
+        multiFeatureSearchActive: false,
+        multiFeaturesSearched: uniqueMultiFeaturesFoundValues,
+        multiFeaturesFilteredOut: uniqueMultiFeaturesFilteredOutValues,
+        multiFeatureSearchTextError: false,
+        multiFeatureSearchText: uniqueMultiFeaturesFoundValues.toString(),
+      });
+    }
     let relevantDifferentialData = [...volcanoPlotSelectedDataArrArg];
     if (doubleClickEvent) {
       // on double click,
       // differentialResults is passed as volcanoPlotSelectedDataArrArg
       // to make it more clear, just use differentialResults below
-      if (multiFeaturesSearched.length || singleFeatureSearched !== '') {
+      if (
+        multiFeaturesSearchedAndFilteredOut.length ||
+        singleFeatureSearched !== ''
+      ) {
         // find the intersection between the searched features, and volcano plot
-        if (multiFeaturesSearched.length) {
-          const multiFeaturesSearchedSet = new Set(multiFeaturesSearched);
+        if (multiFeaturesSearchedAndFilteredOut.length) {
+          const multiFeaturesSearchedAndFilteredOutSet = new Set(
+            multiFeaturesSearchedAndFilteredOut,
+          );
           relevantDifferentialData = [];
-          differentialAlphanumericFields.forEach(column => {
+          const multiFeaturesFound = [];
+          differentialAlphanumericFields.forEach(columnKey => {
             const columnIncludes = [...differentialResults].filter(d => {
-              return multiFeaturesSearchedSet.has(d[column]);
+              if (multiFeaturesSearchedAndFilteredOutSet.has(d[columnKey])) {
+                // push the features found to an array
+                // that will be used to calculate the "Not Found" state
+                multiFeaturesFound.push(d[columnKey]);
+                return true;
+              } else return false;
             });
             relevantDifferentialData = [
               ...relevantDifferentialData,
               ...columnIncludes,
             ];
+          });
+          const multiFeaturesFoundSet = new Set(multiFeaturesFound);
+          const newlyFilteredOutSet = getDifferenceTwoSets(
+            multiFeaturesSearchedAndFilteredOutSet,
+            multiFeaturesFoundSet,
+          );
+          const uniqueFilteredOutValues = [...new Set(newlyFilteredOutSet)];
+          const uniqueFoundValues = [...new Set(multiFeaturesFoundSet)];
+          this.setState({
+            multiFeatureSearchActive: false,
+            multiFeaturesSearched: uniqueFoundValues,
+            multiFeaturesNotFound: [],
+            multiFeaturesFilteredOut: uniqueFilteredOutValues,
+            multiFeatureSearchTextError: false,
+            multiFeatureSearchText: uniqueFoundValues.toString(),
           });
         } else {
           // single search filter
@@ -791,9 +928,18 @@ class DifferentialDetail extends Component {
   };
 
   handleTableChange = () => {
+    const { differentialAlphanumericFields } = this.props;
+    const {
+      multiFeaturesSearched,
+      multiFeaturesFilteredOut,
+      eventFromTableColumnFilter,
+    } = this.state;
     let sortedFilteredData =
       this.volcanoPlotFilteredGridRef?.current?.qhGridRef?.current?.getSortedData() ||
       this.props.differentialResults;
+
+    // if multi-feature search is active, re-run it using data above
+
     this.setState(
       {
         filteredDifferentialTableData: sortedFilteredData,
@@ -801,7 +947,52 @@ class DifferentialDetail extends Component {
         scatterplotLoaded: true,
       },
       function() {
-        // DEV - test whether we want the rest of this in a callback, so scatter loads faster...
+        // if the event stems from the table column filter
+        // and the multi-feature search is in effect
+        // update the multi-feature search UI
+        if (
+          eventFromTableColumnFilter &&
+          (multiFeaturesSearched.length || multiFeaturesFilteredOut.length)
+          // multiFeaturesSearchedAndFilteredOut.length
+        ) {
+          const multiFeaturesSearchedAndFilteredOut = [
+            ...multiFeaturesSearched,
+            ...multiFeaturesFilteredOut,
+          ];
+          // We want to update search terms FILTERED OUT upon table column filter
+          const multiFeaturesSearchedAndFilteredOutSet = new Set(
+            multiFeaturesSearchedAndFilteredOut,
+          );
+          let relevantDifferentialData = [];
+          const multiFeaturesFound = [];
+          differentialAlphanumericFields.forEach(columnKey => {
+            const columnIncludes = [...sortedFilteredData].filter(d => {
+              if (multiFeaturesSearchedAndFilteredOutSet.has(d[columnKey])) {
+                // push the features found to an array
+                // that will be used to calculate the "Not Found" state
+                multiFeaturesFound.push(d[columnKey]);
+                return true;
+              } else return false;
+            });
+            relevantDifferentialData = [
+              ...relevantDifferentialData,
+              ...columnIncludes,
+            ];
+          });
+          const multiFeaturesFoundSet = new Set(multiFeaturesFound);
+          const newlyFilteredOutSet = getDifferenceTwoSets(
+            multiFeaturesSearchedAndFilteredOutSet,
+            multiFeaturesFoundSet,
+          );
+          const uniqueFilteredOutValues = [...new Set(newlyFilteredOutSet)];
+          const uniqueFoundValues = [...new Set(multiFeaturesFoundSet)];
+          this.setState({
+            multiFeatureSearchActive: false,
+            multiFeaturesSearched: uniqueFoundValues,
+            multiFeaturesFilteredOut: uniqueFilteredOutValues,
+            multiFeatureSearchText: uniqueFoundValues.toString(),
+          });
+        }
         let allFeatureIdsRemaining = [...sortedFilteredData].map(
           i => i[this.props.differentialFeatureIdKey],
         );
@@ -866,6 +1057,9 @@ class DifferentialDetail extends Component {
           this.props.onResetDifferentialOutlinedFeature();
           this.pageToFeature();
         }
+        this.setState({
+          eventFromTableColumnFilter: true,
+        });
       },
     );
   };
@@ -1073,6 +1267,8 @@ class DifferentialDetail extends Component {
       multiFeatureSearchOpen: false,
       multiFeaturesSearched: [],
       multiFeaturesNotFound: [],
+      multiFeaturesFilteredOut: [],
+      multiFeatureSearchTextError: false,
       differentialTableData: emptySearchData,
       differentialTableRows: emptySearchData?.length || 0,
       singleFeatureSearchActive: false,
@@ -1082,15 +1278,53 @@ class DifferentialDetail extends Component {
   };
 
   handleMultiFeatureSearch = () => {
-    const { differentialResults, differentialAlphanumericFields } = this.props;
+    const {
+      differentialResults,
+      differentialAlphanumericFields,
+      differentialResultsUnfiltered,
+    } = this.props;
     const { allDataInScatterView, multiFeatureSearchText } = this.state;
     const multiFeatureSearchTextSplit = multiFeatureSearchText
       // split by comma or whitespace (\s), trim and filter out empty strings
       .split(/[,\s]+/)
       .map(item => item.trim())
       .filter(Boolean);
+    const multiFeatureSearchTextSet = new Set(multiFeatureSearchTextSplit);
     // goal: set the new state for differentialTableData, which will update the scatter plot accordingly
-    // 1) Keep all of the differentialResults in the current scatter plot view
+    // 1) Set the "NOT FOUND" data
+    let multiFeaturesUnfilteredFound = [];
+    let relevantDifferentialResultsUnfiltered = [];
+    differentialAlphanumericFields.forEach(columnKey => {
+      // filter the differentialResults for "includes" across all alphanumeric columns
+      const columnIncludes = [...differentialResultsUnfiltered].filter(d => {
+        if (multiFeatureSearchTextSet.has(d[columnKey])) {
+          // push the features found to an array
+          // that will be used to calculate the "Not Found" state
+          multiFeaturesUnfilteredFound.push(d[columnKey]);
+          return true;
+        } else return false;
+      });
+      relevantDifferentialResultsUnfiltered = [
+        ...relevantDifferentialResultsUnfiltered,
+        ...columnIncludes,
+      ];
+    });
+    const multiFeaturesUnfilteredFoundSet = new Set(
+      multiFeaturesUnfilteredFound,
+    );
+    // get the difference between the features searched and found
+    const multiFeaturesUnfilteredNotFoundSet = getDifferenceTwoSets(
+      multiFeatureSearchTextSet,
+      multiFeaturesUnfilteredFoundSet,
+    );
+    const uniqueMultiFeaturesNotFoundValues = [
+      ...new Set(multiFeaturesUnfilteredNotFoundSet),
+    ];
+    const multiFeatureSearchTextSetAfterNotFoundRemoved = getDifferenceTwoSets(
+      multiFeatureSearchTextSet,
+      multiFeaturesUnfilteredNotFoundSet,
+    );
+    // 2) Keep all of the differentialResults in the current scatter plot view
     const allDataInScatterViewIdsSet = new Set(
       [...allDataInScatterView].map(
         d => d[this.props.differentialFeatureIdKey],
@@ -1100,18 +1334,17 @@ class DifferentialDetail extends Component {
       allDataInScatterViewIdsSet.has(d[this.props.differentialFeatureIdKey]),
     );
 
-    // 2) keep the "relevantDifferentialResultsInView" that pass MULTIFEATURE SEARCH filters
-    const multiFeatureSearchTextSet = new Set(multiFeatureSearchTextSplit);
-    let multiFeaturesFound = [];
+    // 3) keep the "relevantDifferentialResultsInView" that pass MULTIFEATURE SEARCH filters
+    let multiFeaturesPassingFilters = [];
     let relevantDifferentialResultsInViewAndSearch = [];
     differentialAlphanumericFields.forEach(columnKey => {
       // filter the differentialResults for "includes" across all alphanumeric columns
       const columnIncludes = [...relevantDifferentialResultsInView].filter(
         d => {
-          if (multiFeatureSearchTextSet.has(d[columnKey])) {
+          if (multiFeatureSearchTextSetAfterNotFoundRemoved.has(d[columnKey])) {
             // push the features found to an array
             // that will be used to calculate the "Not Found" state
-            multiFeaturesFound.push(d[columnKey]);
+            multiFeaturesPassingFilters.push(d[columnKey]);
             return true;
           } else return false;
         },
@@ -1121,21 +1354,19 @@ class DifferentialDetail extends Component {
         ...columnIncludes,
       ];
     });
-
-    function getDifference(setA, setB) {
-      return new Set([...setA].filter(element => !setB.has(element)));
-    }
-    const multiFeaturesFoundSet = new Set(multiFeaturesFound);
+    const multiFeaturesPassingFiltersSet = new Set(multiFeaturesPassingFilters);
     // get the difference between the features searched and found
-    const multiFeaturesNotFoundSet = getDifference(
-      multiFeatureSearchTextSet,
-      multiFeaturesFoundSet,
+    const multiFeaturesFilteredOutSet = getDifferenceTwoSets(
+      multiFeatureSearchTextSetAfterNotFoundRemoved,
+      multiFeaturesPassingFiltersSet,
     );
-    // const multiFeaturesNotFoundValues = Array.from(multiFeaturesNotFoundSet);
-    const uniqueMultiFeaturesNotFoundValues = [
-      ...new Set(multiFeaturesNotFoundSet),
+    // const multiFeaturesFilteredOutValues = Array.from(multiFeaturesFilteredOutSet);
+    const uniqueMultiFeaturesFilteredOutValues = [
+      ...new Set(multiFeaturesFilteredOutSet),
     ];
-    const uniqueMultiFeaturesFoundValues = [...new Set(multiFeaturesFoundSet)];
+    const uniqueMultiFeaturesPassingFiltersValues = [
+      ...new Set(multiFeaturesPassingFiltersSet),
+    ];
     const uniqueRelevantDifferentialResultsInViewAndSearch = [
       ...new Set(relevantDifferentialResultsInViewAndSearch),
     ];
@@ -1144,17 +1375,19 @@ class DifferentialDetail extends Component {
       differentialTableData: uniqueRelevantDifferentialResultsInViewAndSearch,
       differentialTableRows:
         uniqueRelevantDifferentialResultsInViewAndSearch?.length || 0,
-      multiFeaturesSearched: uniqueMultiFeaturesFoundValues,
+      multiFeaturesSearched: uniqueMultiFeaturesPassingFiltersValues,
       multiFeaturesNotFound: uniqueMultiFeaturesNotFoundValues,
+      multiFeaturesFilteredOut: uniqueMultiFeaturesFilteredOutValues,
       multiFeatureSearchOpen: uniqueMultiFeaturesNotFoundValues.length
         ? true
         : false,
       multiFeatureSearchTextError: uniqueMultiFeaturesNotFoundValues.length,
-      multiFeatureSearchText: uniqueMultiFeaturesFoundValues.toString(),
+      multiFeatureSearchText: uniqueMultiFeaturesPassingFiltersValues.toString(),
       multiFeatureSearchActive: false,
       singleFeatureSearchActive: false,
       singleFeatureSearchIcon: 'search',
       singleFeatureSearched: '',
+      eventFromTableColumnFilter: false,
     });
     // } else {
     //  if no features are found
@@ -1189,13 +1422,15 @@ class DifferentialDetail extends Component {
       singleFeatureSearchText,
       // singleFeatureSearchIcon,
       multiSearching,
-      multiFeaturesSearched,
       multiFeatureSearchText,
       multiFeatureSearchTextError,
       multiFeatureSearchOpen,
       multiFeaturesNotFound,
+      multiFeaturesFilteredOut,
       multiFeatureSearchActive,
       notFoundLimit,
+      filteredOutLimit,
+      filteredDifferentialTableData,
     } = this.state;
 
     const {
@@ -1365,7 +1600,10 @@ class DifferentialDetail extends Component {
 
     const searchColor = singleFeatureSearchText.length < 1 ? null : 'blue';
     const searchIcon = singleFeatureSearchText.length < 1 ? 'search' : 'remove';
-    const termsText = multiFeaturesSearched.length === 1 ? 'TERM' : 'TERMS';
+    const featuresFoundText =
+      filteredDifferentialTableData.length === 1 ? 'FEATURE' : 'FEATURES';
+    // const termsSearchText =
+    //   multiFeaturesSearched.length === 1 ? 'TERM' : 'TERMS';
     const SearchPopupStyle = {
       backgroundColor: '2E2E2E',
       borderBottom: '2px solid var(--color-primary)',
@@ -1385,6 +1623,18 @@ class DifferentialDetail extends Component {
         ...{notFoundLength - notFoundLimit} more
       </span>
     ) : null;
+
+    const filteredOutLength = multiFeaturesFilteredOut.length;
+    const limitFilteredOut =
+      filteredOutLength > filteredOutLimit ? true : false;
+    const filteredOutList = limitFilteredOut
+      ? [...multiFeaturesFilteredOut].slice(0, filteredOutLimit)
+      : [...multiFeaturesFilteredOut];
+    const limitFilteredOutText = limitFilteredOut ? (
+      <span id="LimitfilteredOutText">
+        ...{filteredOutLength - filteredOutLimit} more
+      </span>
+    ) : null;
     const multiSearchInput = (
       // this.state.multiSearching ? (
       <div className="AbsoluteMultiSearchDifferential">
@@ -1397,6 +1647,7 @@ class DifferentialDetail extends Component {
                 className={
                   singleFeatureSearchText.length ? 'FakeDisabled' : null
                 }
+                size="small"
                 icon
                 id="MultiFeatureSearchToggle"
                 onClick={() => {
@@ -1450,7 +1701,8 @@ class DifferentialDetail extends Component {
                   onClick={() => toggleMultiFeatureSearch()}
                 >
                   <Button color="blue" size="small">
-                    {multiFeaturesSearched.length} {termsText} SEARCHED
+                    {filteredDifferentialTableData.length} {featuresFoundText}{' '}
+                    {/* FOUND */}
                   </Button>
                   <Label
                     as="a"
@@ -1466,6 +1718,33 @@ class DifferentialDetail extends Component {
                     <Icon name="remove" />
                   </Label>
                 </Button>
+                // <Button
+                //   as="div"
+                //   size="small"
+                //   labelPosition="right"
+                //   onClick={() => toggleMultiFeatureSearch()}
+                // >
+                //   <Label as="a" image>
+                //     {filteredDifferentialTableData.length} {featuresFoundText}{' '}
+                //     FOUND
+                //     <Label.Detail id="MultiFeatureSearchTermsLabel">
+                //       {multiFeaturesSearched.length} {termsSearchText} SEARCHED
+                //     </Label.Detail>
+                //   </Label>
+                //   <Label
+                //     as="a"
+                //     basic
+                //     color="blue"
+                //     pointing="left"
+                //     onClick={e => {
+                //       e.stopPropagation();
+                //       this.handleMultiSearchCancel();
+                //     }}
+                //     id="ClearMultiFeatureSearchLabel"
+                //   >
+                //     <Icon name="remove" />
+                //   </Label>
+                // </Button>
               }
               position="right center"
               basic
@@ -1492,7 +1771,7 @@ class DifferentialDetail extends Component {
                     horizontal
                     size="mini"
                   >
-                    <List.Item className="NoSelect">NOT FOUND:</List.Item>
+                    <List.Item className="NoSelect">DOESN'T EXIST:</List.Item>
                     {notFoundList.map(f => {
                       return (
                         <List.Item key={`featureList-${f}`}>
@@ -1501,6 +1780,33 @@ class DifferentialDetail extends Component {
                       );
                     })}
                     {limitNotFoundText}
+                  </List>
+                ) : null}
+              </Popup.Content>
+              <Popup.Content id="MultiFeaturesSearchedList">
+                {multiFeaturesFilteredOut?.length ? (
+                  <List
+                    animated
+                    inverted
+                    verticalAlign="middle"
+                    className="NoSelect"
+                    divided
+                    horizontal
+                    size="mini"
+                  >
+                    <List.Item className="NoSelect">FILTERED OUT:</List.Item>
+                    {filteredOutList.map(f => {
+                      return (
+                        <List.Item key={`featureList-${f}`}>
+                          <Label
+                          // className="LinkBackground"
+                          >
+                            {f}
+                          </Label>
+                        </List.Item>
+                      );
+                    })}
+                    {limitFilteredOutText}
                   </List>
                 ) : null}
               </Popup.Content>
