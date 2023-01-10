@@ -1941,6 +1941,7 @@ class DifferentialDetail extends Component {
                           <div className="FloatLeft">
                             <Button
                               size="small"
+                              color="blue"
                               icon
                               onClick={() => {
                                 this.setState({
@@ -1953,7 +1954,6 @@ class DifferentialDetail extends Component {
                             </Button>
                             <Button
                               size="small"
-                              color="blue"
                               icon
                               onClick={() => {
                                 this.setState({
