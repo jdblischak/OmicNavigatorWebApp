@@ -652,7 +652,7 @@ class Differential extends Component {
               multiModelMappingArrays,
               id,
             );
-            const testsArg = getTestsArg(
+            let testsArg = getTestsArg(
               plot.plotType,
               differentialModelIds,
               differentialTestIds,
@@ -661,7 +661,7 @@ class Differential extends Component {
               multiModelMappingFirstKey,
               differentialModel,
             );
-            const modelsArg = getModelsArg(
+            let modelsArg = getModelsArg(
               plot.plotType,
               differentialModelIds,
               differentialTestIds,
@@ -669,6 +669,11 @@ class Differential extends Component {
               differentialModelsAndTests,
               multiModelMappingFirstKey,
             );
+            // hotfix for multiModel_boxplot_pro until logic is clarified
+            if (plot.plotID === 'multiModel_boxplot_pro') {
+              modelsArg = ['Proteomics', 'Transcriptomics'];
+              testsArg = null;
+            }
             // handle plotly differently than static plot svgs
             if (plots[i].plotType.includes('plotly')) {
               omicNavigatorService
@@ -762,7 +767,7 @@ class Differential extends Component {
                 multiModelMappingArrays,
                 id,
               );
-              const testsArg = getTestsArg(
+              let testsArg = getTestsArg(
                 plot.plotType,
                 differentialModelIds,
                 differentialTestIds,
@@ -771,7 +776,7 @@ class Differential extends Component {
                 multiModelMappingFirstKey,
                 differentialModel,
               );
-              const modelsArg = getModelsArg(
+              let modelsArg = getModelsArg(
                 plot.plotType,
                 differentialModelIds,
                 differentialTestIds,
@@ -779,6 +784,11 @@ class Differential extends Component {
                 differentialModelsAndTests,
                 multiModelMappingFirstKey,
               );
+              // hotfix for multiModel_boxplot_pro until logic is clarified
+              if (plot.plotID === 'multiModel_boxplot_pro') {
+                modelsArg = ['Proteomics', 'Transcriptomics'];
+                testsArg = null;
+              }
               return omicNavigatorService
                 .plotStudyReturnSvgUrl(
                   differentialStudy,
