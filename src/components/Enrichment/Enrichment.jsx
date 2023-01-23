@@ -1355,18 +1355,23 @@ class Enrichment extends Component {
             if (plot.plotType.includes('multiFeature')) {
               return undefined;
             }
-            const testsArg = getTestsArg(
+            let testsArg = getTestsArg(
               plot.plotType,
               enrichmentModelIds,
               uData,
               enrichmentTest,
             );
-            const modelsArg = getModelsArg(
+            let modelsArg = getModelsArg(
               plot.plotType,
               enrichmentModelIds,
               uData,
               enrichmentModel,
             );
+            // hotfix for multiModel_boxplot_pro until logic is clarified
+            if (plot.plotID === 'multiModel_boxplot_pro') {
+              modelsArg = ['Proteomics', 'Transcriptomics'];
+              testsArg = null;
+            }
             return omicNavigatorService
               .plotStudyReturnSvgUrl(
                 enrichmentStudy,
