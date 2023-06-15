@@ -20,6 +20,8 @@ import DifferentialMultisetFilters from './DifferentialMultisetFilters';
 let cancelRequestGetReportLinkDifferential = () => {};
 let cancelRequestGetResultsIntersection = () => {};
 let cancelRequestGetResultsMultiset = () => {};
+let cancelGetDifferentialResultsColumnTooltips = () => {};
+let cancelGetDifferentialPlotDescriptions = () => {};
 const cacheResultsTable = {};
 async function* streamAsyncIterable(reader) {
   while (true) {
@@ -200,6 +202,8 @@ class DifferentialSearch extends Component {
         differentialModelsDisabled: false,
         differentialModels: differentialModelsMapped,
       });
+      this.getResultsColumnTooltips(differentialStudy);
+      this.getDifferentialPlotDescriptions(differentialStudy);
       if (differentialModel === '') {
         this.getReportLink(differentialStudy, 'default');
       } else {
@@ -290,6 +294,54 @@ class DifferentialSearch extends Component {
         }
       }
     }
+  };
+
+  getResultsColumnTooltips = (study) => {
+    const { onSetDifferentialResultsColumnTooltips } = this.props;
+    cancelGetDifferentialResultsColumnTooltips();
+    let cancelToken = new CancelToken((e) => {
+      cancelGetDifferentialResultsColumnTooltips = e;
+    });
+    omicNavigatorService
+      .getResultsColumnTooltips(study)
+      .then((getResultsColumnTooltipsResponse) => {
+        if (getResultsColumnTooltipsResponse) {
+          onSetDifferentialResultsColumnTooltips(
+            getResultsColumnTooltipsResponse,
+          );
+        } else {
+          onSetDifferentialResultsColumnTooltips([]);
+        }
+      })
+      .catch((error) => {
+        console.error(
+          'Error during getDifferentialResultsColumnTooltipsResponse',
+          error,
+        );
+      });
+  };
+
+  getDifferentialPlotDescriptions = (study) => {
+    const { onSetDifferentialPlotDescriptions } = this.props;
+    cancelGetDifferentialPlotDescriptions();
+    let cancelToken = new CancelToken((e) => {
+      cancelGetDifferentialPlotDescriptions = e;
+    });
+    omicNavigatorService
+      .getPlotDescriptions(study)
+      .then((getPlotDescriptionsResponse) => {
+        if (getPlotDescriptionsResponse) {
+          onSetDifferentialPlotDescriptions(getPlotDescriptionsResponse);
+        } else {
+          onSetDifferentialPlotDescriptions([]);
+        }
+      })
+      .catch((error) => {
+        console.error(
+          'Error during getDifferentialPlotDescriptionsResponse',
+          error,
+        );
+      });
   };
 
   handleStudyChange = (evt, { name, value }) => {
@@ -916,16 +968,26 @@ class DifferentialSearch extends Component {
           <a
             target="_blank"
             rel="noopener noreferrer"
-            href={differentialStudyHrefVisible ? differentialStudyHref : '/'}
+            href={differentialStudyHrefVisible ? differentialStudyHref : null}
           >
-            <Icon
-              name="line graph"
-              size="large"
-              className="StudyHtmlIcon"
-              inverted
-              circular
-              disabled={!differentialStudyHrefVisible}
-            />
+            <Transition
+              visible={!differentialStudyHrefVisible}
+              animation="flash"
+              duration={1000}
+            >
+              <Icon
+                name="info"
+                size="large"
+                className={
+                  differentialStudyHrefVisible
+                    ? 'StudyHtmlIcon'
+                    : 'StudyHtmlIcon DisabledLink'
+                }
+                color={!differentialStudyHrefVisible ? 'grey' : null}
+                inverted
+                circular
+              />
+            </Transition>
           </a>
         }
         style={StudyPopupStyle}
@@ -938,8 +1000,8 @@ class DifferentialSearch extends Component {
             ? studyName
             : differentialStudyReportTooltip
         }
-        mouseEnterDelay={0}
-        mouseLeaveDelay={0}
+        mouseEnterDelay={50}
+        mouseLeaveDelay={50}
       />
     );
 
@@ -1007,10 +1069,6 @@ class DifferentialSearch extends Component {
     let MultisetRadio;
 
     if (isValidSearchDifferential) {
-      const WindowWidth = getWindowWidth();
-      const QuarterWindowWidth = getWindowWidth() / 4;
-      const PlotLabel =
-        QuarterWindowWidth > 350 || WindowWidth < 1200 ? 'View Plot' : 'Plot';
       PlotRadio = (
         <Fragment>
           <Transition
@@ -1020,7 +1078,7 @@ class DifferentialSearch extends Component {
           >
             <Radio
               toggle
-              label={PlotLabel}
+              label="View Plot Intersections"
               className={plotMultisetLoadedDifferential ? 'ViewPlotRadio' : ''}
               checked={multisetButttonActiveDifferential}
               onChange={onHandlePlotAnimationDifferential('uncover')}
@@ -1030,7 +1088,7 @@ class DifferentialSearch extends Component {
           <Popup
             trigger={
               <Icon
-                size="small"
+                // size="small"
                 name="info circle"
                 className="ViewPlotInfo"
                 color="grey"
@@ -1091,7 +1149,7 @@ class DifferentialSearch extends Component {
         </React.Fragment>
       );
     }
-
+    const WindowWidth = getWindowWidth();
     return (
       <React.Fragment>
         <Form className="SearchContainer">
@@ -1187,7 +1245,9 @@ class DifferentialSearch extends Component {
         <div className="MultisetContainer">
           <div className="SliderDiv">
             <span className="MultisetRadio">{MultisetRadio}</span>
-            <span className="PlotRadio">{PlotRadio}</span>
+            <span className={WindowWidth < 1725 ? 'Block' : 'FloatRight'}>
+              {PlotRadio}
+            </span>
           </div>
           <div className="MultisetFilterButtonDiv">
             {MultisetFilterButtonDifferential}
