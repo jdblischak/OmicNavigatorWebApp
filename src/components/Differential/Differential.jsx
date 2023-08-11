@@ -7,7 +7,7 @@ import { withRouter } from 'react-router-dom';
 import SVG from 'react-inlinesvg';
 import { toast } from 'react-toastify';
 import {
-  isNotNANullUndefinedEmptyString,
+  isNotNANullUndefinedEmptyStringInf,
   formatNumberForDisplay,
   splitValue,
   Linkout,
@@ -1485,7 +1485,7 @@ class Differential extends Component {
         // loop through data, one property at a time
         const notNullObject = dataCopy.find((row) => {
           // find the first value for that property
-          return isNotNANullUndefinedEmptyString(row[property]);
+          return isNotNANullUndefinedEmptyStringInf(row[property]);
         });
         let notNullValue = null;
         if (notNullObject) {
@@ -1780,7 +1780,8 @@ class Differential extends Component {
     const multiModelMappingObjectCopy = [...multiModelMappingObject];
     const multiModelMappingArrays = multiModelMappingObjectCopy.filter((mm) => {
       return Object.values(mm).every(
-        (x) => x !== 'NA' && x !== '' && x != null,
+        (x) =>
+          x !== 'NA' && x !== '' && x != null && x !== 'Inf' && x !== '-Inf',
       );
     });
     let multiModelMappingObjectArr = [];
