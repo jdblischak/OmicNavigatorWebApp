@@ -1937,8 +1937,8 @@ class Differential extends Component {
         <Grid.Row className="DifferentialContainer">
           <Grid.Column
             className="SidebarContainer"
-            mobile={16}
-            tablet={16}
+            mobile={4}
+            tablet={4}
             largeScreen={4}
             widescreen={4}
           >
@@ -1990,8 +1990,8 @@ class Differential extends Component {
           </Grid.Column>
           <Grid.Column
             className="DifferentialContentContainer"
-            mobile={16}
-            tablet={16}
+            mobile={12}
+            tablet={12}
             largeScreen={12}
             widescreen={12}
           >

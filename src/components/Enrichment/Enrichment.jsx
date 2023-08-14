@@ -2496,8 +2496,8 @@ class Enrichment extends Component {
         <Grid.Row className="EnrichmentContainer">
           <Grid.Column
             className="SidebarContainer"
-            mobile={16}
-            tablet={16}
+            mobile={4}
+            tablet={4}
             largeScreen={4}
             widescreen={4}
           >
@@ -2549,8 +2549,8 @@ class Enrichment extends Component {
           </Grid.Column>
           <Grid.Column
             className="EnrichmentContentContainer"
-            mobile={16}
-            tablet={16}
+            mobile={12}
+            tablet={12}
             largeScreen={12}
             widescreen={12}
           >
