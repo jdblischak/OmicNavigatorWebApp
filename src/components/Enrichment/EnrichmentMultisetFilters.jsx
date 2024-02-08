@@ -11,6 +11,7 @@ class EnrichmentMultisetFilters extends Component {
 
   componentDidUpdate(prevProps, prevState, snapshot) {
     if (
+      this.props.uData !== prevProps.uData ||
       this.props.multisetFiltersVisibleEnrichment !==
         prevProps.multisetFiltersVisibleEnrichment ||
       this.props.mustEnrichment !== prevProps.mustEnrichment ||
@@ -34,9 +35,7 @@ class EnrichmentMultisetFilters extends Component {
   makeMultiset = () => {
     const { multisetFiltersVisibleEnrichment, uSettings } = this.props;
     if (multisetFiltersVisibleEnrichment) {
-      d3.selectAll('#multiset-query')
-        .selectAll('*')
-        .remove();
+      d3.selectAll('#multiset-query').selectAll('*').remove();
       const base = d3
         .selectAll('#multiset-query')
         .append('div')
@@ -48,9 +47,7 @@ class EnrichmentMultisetFilters extends Component {
         this.metaScript(baseMetaSvg);
       }
     } else {
-      d3.selectAll('#filter-tests')
-        .selectAll('*')
-        .remove();
+      d3.selectAll('#filter-tests').selectAll('*').remove();
       const base = d3
         .selectAll('#filter-tests')
         .append('div')
@@ -59,7 +56,7 @@ class EnrichmentMultisetFilters extends Component {
     }
   };
 
-  metaScript = metaSvg => {
+  metaScript = (metaSvg) => {
     const {
       uAnchor,
       uSettings,
@@ -129,10 +126,10 @@ class EnrichmentMultisetFilters extends Component {
           .enter()
           .append('text')
           .attr('x', 7)
-          .attr('y', function(d, i) {
+          .attr('y', function (d, i) {
             return 30 + heightScalar * i;
           })
-          .text(function(d) {
+          .text(function (d) {
             return d;
           })
           .attr('font-family', 'Lato,Arial,Helvetica,sans-serif')
@@ -145,14 +142,14 @@ class EnrichmentMultisetFilters extends Component {
           .append('circle')
           .style('fill', 'green')
           .attr('cx', 17)
-          .attr('cy', function() {
+          .attr('cy', function () {
             return 30 + heightScalar * setDescP.length;
           })
           .attr('r', 4);
         metaSvg
           .append('text')
           .attr('x', 25)
-          .attr('y', function() {
+          .attr('y', function () {
             return 30 + heightScalar * setDescP.length + 4;
           })
           .text(uAnchor)
@@ -168,7 +165,7 @@ class EnrichmentMultisetFilters extends Component {
         .append('circle')
         .style('fill', 'green')
         .attr('cx', 17)
-        .attr('cy', function(d, i) {
+        .attr('cy', function (d, i) {
           if (!useAnchor) {
             return (
               30 +
@@ -192,7 +189,7 @@ class EnrichmentMultisetFilters extends Component {
         .enter()
         .append('text')
         .attr('x', 25)
-        .attr('y', function(d) {
+        .attr('y', function (d) {
           if (!useAnchor) {
             return (
               30 +
@@ -209,7 +206,7 @@ class EnrichmentMultisetFilters extends Component {
             );
           }
         })
-        .text(function(d) {
+        .text(function (d) {
           return d;
         })
         .attr('font-family', 'Lato,Arial,Helvetica,sans-serif')
@@ -223,7 +220,7 @@ class EnrichmentMultisetFilters extends Component {
           .enter()
           .append('text')
           .attr('x', 7)
-          .attr('y', function(d, i) {
+          .attr('y', function (d, i) {
             if (!useAnchor && mustEnrichment.length === 0) {
               return 30 + heightScalar * i;
             } else {
@@ -235,7 +232,7 @@ class EnrichmentMultisetFilters extends Component {
               );
             }
           })
-          .text(function(d) {
+          .text(function (d) {
             return d;
           })
           .attr('font-family', 'Lato,Arial,Helvetica,sans-serif')
@@ -250,7 +247,7 @@ class EnrichmentMultisetFilters extends Component {
           .append('circle')
           .style('fill', 'red')
           .attr('cx', 17)
-          .attr('cy', function(d, i) {
+          .attr('cy', function (d, i) {
             if (!useAnchor && mustEnrichment.length === 0) {
               return 30 + heightScalar * (i + notSetDescP.length);
             } else {
@@ -274,7 +271,7 @@ class EnrichmentMultisetFilters extends Component {
           .enter()
           .append('text')
           .attr('x', 25)
-          .attr('y', function(d, i) {
+          .attr('y', function (d, i) {
             if (!useAnchor && mustEnrichment.length === 0) {
               return 30 + 4 + heightScalar * (i + notSetDescP.length);
             } else {
@@ -289,7 +286,7 @@ class EnrichmentMultisetFilters extends Component {
               );
             }
           })
-          .text(function(d) {
+          .text(function (d) {
             return d;
           })
           .attr('font-family', 'Lato,Arial,Helvetica,sans-serif')
@@ -299,7 +296,7 @@ class EnrichmentMultisetFilters extends Component {
     }
   };
 
-  prepareMultiset = base => {
+  prepareMultiset = (base) => {
     const {
       multisetTestsFilteredOut,
       uData,
@@ -435,13 +432,13 @@ class EnrichmentMultisetFilters extends Component {
       .data(dataset)
       .enter()
       .append('circle')
-      .style('opacity', function(d) {
+      .style('opacity', function (d) {
         return multisetTestsFilteredOut.includes(d) ? 0.5 : 1;
       })
       .style('fill', baseColorCode)
       .attr('class', 'SetCircle')
       .attr('cx', circlePadding + circleRadius)
-      .attr('cy', function(d) {
+      .attr('cy', function (d) {
         return (
           dataset.indexOf(d) * (2 * circleRadius) +
           (topBoxHeight + circleRadius + circlePadding) +
@@ -449,13 +446,13 @@ class EnrichmentMultisetFilters extends Component {
         );
       })
       .attr('r', circleRadius)
-      .style('stroke', d =>
+      .style('stroke', (d) =>
         mustEnrichment.includes(d) || d === uAnchor
           ? chosenColorCode
           : 'transparent',
       )
       .attr('stroke-width', circleRadius / 5)
-      .on('click', function(d) {
+      .on('click', function (d) {
         if (!multisetTestsFilteredOut.includes(d)) {
           if (!mustEnrichment.includes(d) && d !== uAnchor) {
             let mustEnrichmentCopy = [...mustEnrichment];
@@ -475,13 +472,13 @@ class EnrichmentMultisetFilters extends Component {
       .data(dataset)
       .enter()
       .append('circle')
-      .style('opacity', function(d) {
+      .style('opacity', function (d) {
         return multisetTestsFilteredOut.includes(d) ? 0.5 : 1;
       })
       .style('fill', backgroundColorCode)
       .attr('class', 'SetCircle')
       .attr('cx', 2 * circlePadding + 3 * circleRadius)
-      .attr('cy', function(d) {
+      .attr('cy', function (d) {
         return (
           dataset.indexOf(d) * (2 * circleRadius) +
           (topBoxHeight + circleRadius + circlePadding) +
@@ -489,7 +486,7 @@ class EnrichmentMultisetFilters extends Component {
         );
       })
       .attr('r', circleRadius)
-      .style('stroke', d =>
+      .style('stroke', (d) =>
         !notEnrichment.includes(d) &&
         !mustEnrichment.includes(d) &&
         d !== uAnchor
@@ -497,7 +494,7 @@ class EnrichmentMultisetFilters extends Component {
           : baseColorCode,
       )
       .attr('stroke-width', circleRadius / 5)
-      .on('click', function(d) {
+      .on('click', function (d) {
         if (!multisetTestsFilteredOut.includes(d)) {
           let mustEnrichmentCopy = [...mustEnrichment];
           let notEnrichmentCopy = [...notEnrichment];
@@ -518,13 +515,13 @@ class EnrichmentMultisetFilters extends Component {
       .data(dataset)
       .enter()
       .append('circle')
-      .style('opacity', function(d) {
+      .style('opacity', function (d) {
         return multisetTestsFilteredOut.includes(d) ? 0.5 : 1;
       })
       .style('fill', baseColorCode)
       .attr('class', 'SetCircle')
       .attr('cx', 2 * circlePadding + 3 * circleRadius)
-      .attr('cy', function(d) {
+      .attr('cy', function (d) {
         return (
           dataset.indexOf(d) * (2 * circleRadius) +
           (topBoxHeight + circleRadius + circlePadding) +
@@ -532,7 +529,7 @@ class EnrichmentMultisetFilters extends Component {
         );
       })
       .attr('r', circleRadius / 3)
-      .on('click', function(d) {
+      .on('click', function (d) {
         if (!multisetTestsFilteredOut.includes(d)) {
           let mustEnrichmentCopy = [...mustEnrichment];
           let notEnrichmentCopy = [...notEnrichment];
@@ -553,12 +550,12 @@ class EnrichmentMultisetFilters extends Component {
       .enter()
       .append('circle')
       .style('fill', backgroundColorCode)
-      .style('opacity', function(d) {
+      .style('opacity', function (d) {
         return multisetTestsFilteredOut.includes(d) ? 0.5 : 1;
       })
       .attr('class', 'SetCircle')
       .attr('cx', 3 * circlePadding + 5 * circleRadius)
-      .attr('cy', function(d) {
+      .attr('cy', function (d) {
         return (
           dataset.indexOf(d) * (2 * circleRadius) +
           (topBoxHeight + circleRadius + circlePadding) +
@@ -566,13 +563,13 @@ class EnrichmentMultisetFilters extends Component {
         );
       })
       .attr('r', circleRadius)
-      .style('stroke', d =>
+      .style('stroke', (d) =>
         notEnrichment.includes(d) && d !== uAnchor
           ? chosenColorCode
           : 'transparent',
       )
       .attr('stroke-width', circleRadius / 5)
-      .on('click', function(d) {
+      .on('click', function (d) {
         if (!multisetTestsFilteredOut.includes(d)) {
           let mustEnrichmentCopy = [...mustEnrichment];
           let notEnrichmentCopy = [...notEnrichment];
@@ -604,7 +601,7 @@ class EnrichmentMultisetFilters extends Component {
       .enter()
       .append('text')
       .attr('x', 5 * circlePadding + 6 * circleRadius)
-      .attr('y', function(d) {
+      .attr('y', function (d) {
         return (
           dataset.indexOf(d) * (2 * circleRadius) +
           (topBoxHeight + circleRadius + circlePadding) +
@@ -612,15 +609,15 @@ class EnrichmentMultisetFilters extends Component {
           circleRadius / 2
         );
       })
-      .text(function(d) {
+      .text(function (d) {
         return d;
       })
-      .style('opacity', function(d) {
+      .style('opacity', function (d) {
         return multisetTestsFilteredOut.includes(d) ? 0.5 : 1;
       })
       .attr('font-family', 'Lato,Arial,Helvetica,sans-serif')
-      .attr('font-weight', d => (d === uAnchor ? 'bold' : 'normal'))
-      .attr('font-size', function() {
+      .attr('font-weight', (d) => (d === uAnchor ? 'bold' : 'normal'))
+      .attr('font-size', function () {
         return heightScalar * 14 + 'px';
       })
       .attr('fill', 'black');
@@ -633,7 +630,7 @@ class EnrichmentMultisetFilters extends Component {
         .enter()
         .append('foreignObject')
         .attr('x', svgWidth - 20)
-        .attr('y', function(d) {
+        .attr('y', function (d) {
           return (
             dataset.indexOf(d) * (2 * circleRadius) +
             (topBoxHeight + circleRadius + circlePadding) +
@@ -649,10 +646,10 @@ class EnrichmentMultisetFilters extends Component {
         .attr('class', 'checkboxMultiset')
         .append('input')
         .attr('type', 'checkbox')
-        .property('checked', function(d) {
+        .property('checked', function (d) {
           return !multisetTestsFilteredOut.includes(d);
         })
-        .on('change', function(d) {
+        .on('change', function (d) {
           self.props.onFilterOutChange(d);
         });
     }
@@ -673,7 +670,7 @@ class EnrichmentMultisetFilters extends Component {
       )
       .text('Must')
       .attr('font-family', 'Lato,Arial,Helvetica,sans-serif')
-      .attr('font-size', function() {
+      .attr('font-size', function () {
         return heightScalar * 14 + 'px';
       })
       .attr('fill', 'black');
@@ -693,7 +690,7 @@ class EnrichmentMultisetFilters extends Component {
       )
       .text('Maybe')
       .attr('font-family', 'Lato,Arial,Helvetica,sans-serif')
-      .attr('font-size', function() {
+      .attr('font-size', function () {
         return heightScalar * 14 + 'px';
       })
       .attr('fill', 'black');
@@ -713,7 +710,7 @@ class EnrichmentMultisetFilters extends Component {
       )
       .text('Not')
       .attr('font-family', 'Lato,Arial,Helvetica,sans-serif')
-      .attr('font-size', function() {
+      .attr('font-size', function () {
         return heightScalar * 14 + 'px';
       })
       .attr('fill', 'black');
@@ -723,7 +720,7 @@ class EnrichmentMultisetFilters extends Component {
         .append('line')
         .attr('class', 'numElements')
         .attr('x1', 4 * circlePadding + 6 * circleRadius)
-        .attr('x2', function() {
+        .attr('x2', function () {
           return (
             4 * circlePadding +
             6 * circleRadius +
@@ -743,7 +740,7 @@ class EnrichmentMultisetFilters extends Component {
         .enter()
         .append('text')
         .attr('class', 'numElements')
-        .attr('x', function() {
+        .attr('x', function () {
           return (
             4 * circlePadding +
             6 * circleRadius +
@@ -756,13 +753,13 @@ class EnrichmentMultisetFilters extends Component {
 
       // const numElementsText =
       numElementsVar
-        .text(function(d) {
+        .text(function (d) {
           const dText =
             numElements !== maxElements ? `${d} of ${maxElements}` : d;
           return dText;
         })
         .attr('font-family', 'Lato,Arial,Helvetica,sans-serif')
-        .attr('font-size', function() {
+        .attr('font-size', function () {
           return heightScalar * 13 + 'px';
         })
         .attr('fill', 'black');
@@ -795,14 +792,14 @@ class EnrichmentMultisetFilters extends Component {
 
     function updateCircles() {
       mustCircles
-        .style('stroke', d =>
+        .style('stroke', (d) =>
           mustEnrichment.includes(d) || d === uAnchor
             ? chosenColorCode
             : 'transparent',
         )
         .attr('stroke-width', circleRadius / 5);
       maybeCircles
-        .style('stroke', d =>
+        .style('stroke', (d) =>
           !notEnrichment.includes(d) &&
           !mustEnrichment.includes(d) &&
           d !== uAnchor
@@ -811,7 +808,7 @@ class EnrichmentMultisetFilters extends Component {
         )
         .attr('stroke-width', circleRadius / 5);
       notCircles
-        .style('stroke', d =>
+        .style('stroke', (d) =>
           notEnrichment.includes(d) ? chosenColorCode : 'transparent',
         )
         .attr('stroke-width', circleRadius / 5);
@@ -884,18 +881,18 @@ class EnrichmentMultisetFilters extends Component {
       .enter()
       .append('text')
       .attr('x', 10)
-      .attr('y', function(d) {
+      .attr('y', function (d) {
         return dataset.indexOf(d) * textScalar + 18;
       })
-      .text(function(d) {
+      .text(function (d) {
         return d;
       })
-      .style('opacity', function(d) {
+      .style('opacity', function (d) {
         return multisetTestsFilteredOut.includes(d) ? 0.5 : 1;
       })
       .attr('font-family', 'Lato,Arial,Helvetica,sans-serif')
-      .attr('font-weight', d => (d === uAnchor ? 'bold' : 'normal'))
-      .attr('font-size', function() {
+      .attr('font-weight', (d) => (d === uAnchor ? 'bold' : 'normal'))
+      .attr('font-size', function () {
         return 14 + 'px';
       })
       .attr('fill', 'black');
@@ -906,7 +903,7 @@ class EnrichmentMultisetFilters extends Component {
       .enter()
       .append('foreignObject')
       .attr('x', svgWidth - 25)
-      .attr('y', function(d) {
+      .attr('y', function (d) {
         return dataset.indexOf(d) * textScalar + 6;
       })
       .attr('width', 20)
@@ -916,10 +913,10 @@ class EnrichmentMultisetFilters extends Component {
       .attr('class', 'checkboxMultiset')
       .append('input')
       .attr('type', 'checkbox')
-      .property('checked', function(d) {
+      .property('checked', function (d) {
         return !multisetTestsFilteredOut.includes(d);
       })
-      .on('change', function(d) {
+      .on('change', function (d) {
         self.props.onFilterOutChange(d);
       });
   }
@@ -928,11 +925,11 @@ class EnrichmentMultisetFilters extends Component {
     this.props.onAddFilter();
   };
 
-  removeFilter = index => {
+  removeFilter = (index) => {
     this.props.onRemoveFilter(index);
   };
 
-  changeHoveredFilter = index => {
+  changeHoveredFilter = (index) => {
     this.props.onChangeHoveredFilter(index);
   };
 
@@ -954,7 +951,7 @@ class EnrichmentMultisetFilters extends Component {
         <Fragment>
           <Form className="MultisetDropdownContainer">
             <ul style={{ padding: '0px' }}>
-              {indexFilters.map(index => (
+              {indexFilters.map((index) => (
                 <Form.Group
                   key={index}
                   onMouseEnter={() => this.changeHoveredFilter(index)}

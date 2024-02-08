@@ -650,8 +650,8 @@ class Enrichment extends Component {
               function () {
                 let columns = this.state.enrichmentColumnsUnfiltered || [];
                 if (
-                  this.state.enrichmentResults?.length
-                  // && !this.enrichmentColumnsConfigured
+                  this.state.enrichmentResults?.length &&
+                  !this.enrichmentColumnsConfigured
                 ) {
                   columns = this.getConfigCols(this.state.enrichmentResults);
                   this.setState({
@@ -706,8 +706,8 @@ class Enrichment extends Component {
                 function () {
                   let columns = this.state.enrichmentColumnsUnfiltered || [];
                   if (
-                    this.state.enrichmentResults?.length
-                    // && !this.enrichmentColumnsConfigured
+                    this.state.enrichmentResults?.length &&
+                    !this.enrichmentColumnsConfigured
                   ) {
                     columns = this.getConfigCols(this.state.enrichmentResults);
                     this.setState({
@@ -876,6 +876,7 @@ class Enrichment extends Component {
     if (firstFullObject) {
       let allProperties = Object.keys(firstFullObject);
       const dataCopy = [...annotationData];
+      let enrichmentColumnsConfiguredVar = false;
       allProperties.forEach((property) => {
         // loop through data, one property at a time
         const notNullObject = dataCopy.find((row) => {
@@ -896,12 +897,22 @@ class Enrichment extends Component {
             enrichmentNumericFields.push(property);
           }
         } else {
-          // otherwise push it to type numeric
+          // if this occurs, the first 30 records streamed
+          // did not have a value for all properties
+          // we push it to number just so we can show the table quickly
           enrichmentNumericFields.push(property);
+          // but set flag false so this func can be called again
+          enrichmentColumnsConfiguredVar = false;
         }
+        this.enrichmentColumnsConfigured = this.enrichmentColumnsConfiguredVar;
       });
     }
-
+    // multiset svg rebuilds based on uData...if there are no results we need to override this from being passed down
+    if (enrichmentNumericFields.length !== 0) {
+      this.setState({
+        uData: enrichmentNumericFields,
+      });
+    }
     const alphanumericTrigger = enrichmentAlphanumericFields[0];
     this.setState({ enrichmentFeatureIdKey: alphanumericTrigger });
     const enrichmentAlphanumericColumnsMapped =
@@ -964,12 +975,6 @@ class Enrichment extends Component {
         };
       });
 
-    // multiset svg rebuilds based on uData...if there are no results we need to override this from being passed down
-    if (enrichmentNumericFields.length !== 0) {
-      this.setState({
-        uData: enrichmentNumericFields,
-      });
-    }
     const enrichmentNumericColumnsMapped = enrichmentNumericFields.map((c) => {
       return {
         title: c,
