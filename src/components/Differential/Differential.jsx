@@ -46,11 +46,11 @@ class Differential extends Component {
     this.state = {
       // GENERAL
       // differentialPlotTypes: [],
-
       differentialStudyMetadata: [],
       differentialModelsAndTests: [],
       differentialTestsMetadata: [],
       differentialTestIds: [],
+      differentialTestIdsCommon: [],
       differentialModelIds: [],
       // RESULTS
       differentialResultsTableLoading: false,
@@ -249,10 +249,35 @@ class Differential extends Component {
   };
 
   setStudyModelTestMetadata = (studyData, modelsAndTests) => {
+    let commonTestIds = [];
+    let testIDsArrays = [];
+    if (modelsAndTests.length) {
+      if (modelsAndTests.length === 1) {
+        testIDsArrays = modelsAndTests.map((obj) => {
+          obj.tests.map((test) => test.testID);
+        });
+        commonTestIds = testIDsArrays;
+      }
+      if (modelsAndTests.length > 1) {
+        // Iterate over the tests of the first object
+        for (const test of modelsAndTests[0].tests) {
+          // Check if the testID exists in all other objects
+          if (
+            modelsAndTests.every((obj) =>
+              obj.tests.some((t) => t.testID === test.testID),
+            )
+          ) {
+            commonTestIds.push(test.testID);
+          }
+        }
+        // console.log('Common testIDs across all objects:', commonTestIds);
+      }
+    }
     this.setState(
       {
         differentialStudyMetadata: studyData,
         differentialModelsAndTests: modelsAndTests,
+        differentialTestIdsCommon: commonTestIds,
       },
       function () {
         this.handlePlotTypesDifferential(this.props.differentialModel);
@@ -548,7 +573,6 @@ class Differential extends Component {
       ? id
       : dataItem[differentialFeatureIdKey];
     const self = this;
-    debugger;
     this.setState(
       {
         plotOverlayData: plotOverlayData,
@@ -598,6 +622,7 @@ class Differential extends Component {
     const {
       differentialPlotTypes,
       differentialTestIds,
+      differentialTestIdsCommon,
       differentialModelIds,
       differentialModelsAndTests,
       multiModelMappingFirstKey,
@@ -664,6 +689,7 @@ class Differential extends Component {
               differentialModelsAndTests,
               multiModelMappingFirstKey,
               differentialModel,
+              differentialTestIdsCommon,
             );
             let modelsArg = getModelsArg(
               plot.plotType,
@@ -780,6 +806,7 @@ class Differential extends Component {
                 differentialModelsAndTests,
                 multiModelMappingFirstKey,
                 differentialModel,
+                differentialTestIdsCommon,
               );
               let modelsArg = getModelsArg(
                 plot.plotType,
@@ -914,6 +941,7 @@ class Differential extends Component {
       const {
         differentialPlotTypes,
         differentialTestIds,
+        differentialTestIdsCommon,
         differentialModelIds,
         differentialModelsAndTests,
         multiModelMappingFirstKey,
@@ -949,6 +977,7 @@ class Differential extends Component {
               differentialModelsAndTests,
               multiModelMappingFirstKey,
               differentialModel,
+              differentialTestIdsCommon,
             );
             const modelsArg = getModelsArg(
               multifeaturePlot[0].plotType,
@@ -1028,6 +1057,7 @@ class Differential extends Component {
               differentialModelsAndTests,
               multiModelMappingFirstKey,
               differentialModel,
+              differentialTestIdsCommon,
             );
             const modelsArg = getModelsArg(
               plot.plotType,
@@ -1231,6 +1261,7 @@ class Differential extends Component {
     const {
       differentialPlotTypes,
       differentialTestIds,
+      differentialTestIdsCommon,
       differentialModelIds,
       differentialModelsAndTests,
       multiModelMappingFirstKey,
@@ -1253,6 +1284,7 @@ class Differential extends Component {
         differentialModelsAndTests,
         multiModelMappingFirstKey,
         differentialModel,
+        differentialTestIdsCommon,
       );
       const modelsArg = getModelsArg(
         multifeaturePlot[plotindex].plotType,
